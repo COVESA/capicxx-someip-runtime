@@ -1,0 +1,76 @@
+CommonAPI-SomeIP Tests
+----------------------
+:doctitle: CommonAPI-SomeIP Tests
+
+Copyright
++++++++++
+Copyright (C) 2013, GENIVI Alliance, Inc.
+Copyright (C) 2015, Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+
+This file is part of GENIVI Project IPC Common API.
+
+Contributions are licensed to the GENIVI Alliance under one or more
+Contribution License Agreements or MPL 2.0 .
+
+(C) Copyright
+This Source Code Form is subject to the terms of the
+Mozilla Public License, v. 2.0. If a  copy of the MPL was not distributed with
+this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+For further information see https://collab.genivi.org/wiki/display/genivi/SysInfraEGCommonIDLCommonAPIGuide
+
+License
++++++++
+This project is licensed under MPL 2.0
+
+Contribution is done under GENIVI CLA or MPL2.0. 
+
+Version
++++++++
+The current version can be taken from the git.
+
+Build Instructions
+~~~~~~~~~~~~~~~~~~
+To build the test the following projects are needed:
+
+* CommonAPI
+* CommonAPI-Tools
+* CommonAPI-SomeIP
+* CommonAPI-SomeIP-Tools
+* vSomeIP
+
+Before building it's necessary to generate the code from the files in the `fidl` directory.
+
+* The the commonapi-generator's generated code should be stored in `src-gen/core`.
+* The the commonapi-someip-generator's generated code should be stored in `src-gen/someip`.
+
+
+Example call for cmake:
+
+----
+export GTEST_ROOT=$YOUR_PATH_HERE/gtest-1.7.0/
+rm -rf src-gen
+rm -rf build
+mkdir build
+cd build
+cmake \
+-DCommonAPI-SomeIP_DIR=$YOUR_PATH_HERE/ascgit017.CommonAPI-SomeIP/build/ \
+-Dvsomeip_DIR=$YOUR_PATH_HERE/ascgit017.vSomeIP/build/ \
+-DCommonAPI_DIR=$YOUR_PATH_HERE/ascgit017.CommonAPI/build/ \
+..
+make
+----
+
+Running the tests
+~~~~~~~~~~~~~~~~~
+
+----
+cd build
+LD_LIBRARY_PATH=. \
+COMMONAPI_CONFIG=../commonapi4someip.ini \
+VSOMEIP_CONFIGURATION_FILE=../vsomeip.json \
+./SomeIPManagedTest
+----
+
+Or simply call `ctest -V` in the build directory.
+This will automatically run all available tests with the correct environment variables set.

@@ -1,0 +1,46 @@
+= IPC CommonAPI SOME/IP C++
+
+:doctitle: IPC CommonAPI SOME/IP C++
+:version:
+
+== Copyright
+Copyright (C) 2015, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
+Copyright (C) 2015, GENIVI Alliance, Inc.
+
+This file is part of GENIVI Project IPC Common API C++.
+ 
+Contributions are licensed to the GENIVI Alliance under one or more Contribution License Agreements or MPL 2.0.
+
+== License
+This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+
+== Version
+{version}
+
+== CommonAPI SOME/IP C++ User Guide
+The user guide can be found in the documentation directory of the CommonAPI-SomeIP-Tools project.
+
+== Further information
+Source code and latest news can be found at http://projects.genivi.org/commonapi/.
+
+== Build Instructions for Linux
+
+=== vsomeip
+
+In order to build the CommonAPI SOME/IP Runtime library the vsomeip library must be available on your system. Please consult the vsomeip documentation for informations on building vsomeip.
+
+=== Build CommonAPI-SomeIP Runtime
+
+Use CMake to build the CommonAPI SOME/IP runtime library. We assume that your source directory is common-api-someip-runtime:
+
+----
+$ cd common-api-someip-runtime
+$ mkdir build
+$ cmake -D USE_INSTALLED_COMMONAPI=ON -D CMAKE_INSTALL_PREFIX=/usr/local ..
+$ make
+$ make install
+----
+
+You can change the installation directory by the CMake variable +CMAKE_INSTALL_PREFIX+ or you can let it uninstalled (skip the +make install+ command). If you want to use the uninstalled version of CommonAPI set the CMake variable USE_INSTALLED_COMMONAPI to OFF.
+
+For further build instructions (build for windows, build documentation, tests etc.) please refer to the CommonAPI SOME/IP tutorial.
