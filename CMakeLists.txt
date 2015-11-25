@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 1)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 3)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 4)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -27,7 +27,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS")
 link_directories(${Boost_LIBRARY_DIR})
 else()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -D_GLIBCXX_USE_NANOSLEEP")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP")
 endif()
 
 SET(MAX_LOG_LEVEL "DEBUG" CACHE STRING "maximum log level")
@@ -57,7 +57,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
 endif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
 
 if (NOT MSVC)
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D${OS} ${NO_DEPRECATED_REGISTER} -DBOOST_LOG_DYN_LINK -pthread -g -std=c++0x -O0")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D${OS} ${NO_DEPRECATED_REGISTER} -DBOOST_LOG_DYN_LINK -pthread -g -std=c++0x -O0")
 endif()
 # END TEMPORARY WORKAROUND #
 
@@ -88,9 +88,9 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.1.3 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.1.4 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.1.3 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(CommonAPI 3.1.4 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
@@ -101,11 +101,11 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 1.3.0 REQUIRED)
+find_package (vsomeip 2.0.0 REQUIRED)
 message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
-	${Boost_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
     ${VSOMEIP_INCLUDE_DIRS}
     include
@@ -180,6 +180,13 @@ install (
     EXPORT CommonAPI-SomeIPTargets
     DESTINATION "${INSTALL_CMAKE_DIR}"
 )
+
+##############################################################################
+# create pkg-config file
+if(NOT WIN32)
+        configure_file(CommonAPI-SomeIP.pc.in ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc @ONLY)
+        install(FILES ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc DESTINATION lib/pkconfig)
+endif()
 
 ##############################################################################
 # maintainer-clean

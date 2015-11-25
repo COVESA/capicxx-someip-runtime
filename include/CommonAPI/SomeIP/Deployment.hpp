@@ -19,15 +19,16 @@ namespace CommonAPI {
 namespace SomeIP {
 
 struct EnumerationDeployment : CommonAPI::Deployment<> {
-	EnumerationDeployment(uint8_t _width) : width_(_width) {}
+    EnumerationDeployment(uint8_t _width) : width_(_width) {}
 
-	uint8_t width_;
+    uint8_t width_;
 };
 
 enum class StringEncoding {UTF8, UTF16LE, UTF16BE};
 
 struct StringDeployment : CommonAPI::Deployment<> {
-	COMMONAPI_EXPORT StringDeployment(uint32_t _stringLength, uint8_t _stringLengthWidth, StringEncoding _stringEncoding)
+    COMMONAPI_EXPORT StringDeployment(uint32_t _stringLength,
+            uint8_t _stringLengthWidth, StringEncoding _stringEncoding)
         : stringLength_(_stringLength),
           stringLengthWidth_(_stringLengthWidth),
           stringEncoding_(_stringEncoding) {};
@@ -39,10 +40,10 @@ struct StringDeployment : CommonAPI::Deployment<> {
     StringEncoding stringEncoding_;
 };
 
-template<typename... _Types>
-struct StructDeployment : CommonAPI::Deployment<_Types...> {
-    StructDeployment(uint8_t _structLengthWidth, _Types*... t)
-        : CommonAPI::Deployment<_Types...>(t...),
+template<typename... Types_>
+struct StructDeployment : CommonAPI::Deployment<Types_...> {
+    StructDeployment(uint8_t _structLengthWidth, Types_*... t)
+        : CommonAPI::Deployment<Types_...>(t...),
           structLengthWidth_(_structLengthWidth) {};
 
     // The length field of the struct contains the size of the struct in bytes;
@@ -51,10 +52,11 @@ struct StructDeployment : CommonAPI::Deployment<_Types...> {
     uint8_t structLengthWidth_;
 };
 
-template<typename... _Types>
-struct VariantDeployment : CommonAPI::Deployment<_Types...> {
-    VariantDeployment(uint8_t _unionLengthWidth, uint8_t _unionTypeWidth, bool _unionDefaultOrder, uint32_t _unionMaxLength, _Types*... t)
-        : CommonAPI::Deployment<_Types...>(t...),
+template<typename... Types_>
+struct VariantDeployment : CommonAPI::Deployment<Types_...> {
+    VariantDeployment(uint8_t _unionLengthWidth, uint8_t _unionTypeWidth,
+            bool _unionDefaultOrder, uint32_t _unionMaxLength, Types_*... t)
+        : CommonAPI::Deployment<Types_...>(t...),
           unionLengthWidth_(_unionLengthWidth),
           unionTypeWidth_(_unionTypeWidth),
           unionDefaultOrder_(_unionDefaultOrder),
@@ -72,10 +74,11 @@ struct VariantDeployment : CommonAPI::Deployment<_Types...> {
     uint32_t unionMaxLength_;
 };
 
-template<typename _ElementDepl>
-struct ArrayDeployment : CommonAPI::ArrayDeployment<_ElementDepl> {
-    ArrayDeployment(_ElementDepl *_element, uint32_t _arrayMinLength, uint32_t _arrayMaxLength, uint8_t _arrayLengthWidth)
-        : CommonAPI::ArrayDeployment<_ElementDepl>(_element),
+template<typename ElementDepl_>
+struct ArrayDeployment : CommonAPI::ArrayDeployment<ElementDepl_> {
+    ArrayDeployment(ElementDepl_ *_element, uint32_t _arrayMinLength,
+            uint32_t _arrayMaxLength, uint8_t _arrayLengthWidth)
+        : CommonAPI::ArrayDeployment<ElementDepl_>(_element),
           arrayMinLength_(_arrayMinLength),
           arrayMaxLength_(_arrayMaxLength),
           arrayLengthWidth_(_arrayLengthWidth) {}

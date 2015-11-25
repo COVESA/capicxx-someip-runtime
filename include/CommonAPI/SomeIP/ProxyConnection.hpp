@@ -46,6 +46,7 @@ class ProxyConnection {
      public:
         virtual ~EventHandler() { }
         virtual void onEventMessage(const Message&) = 0;
+        virtual void onInitialValueEventMessage(const Message &, const uint32_t) {};
     };
 
     typedef std::tuple< service_id_t, instance_id_t, eventgroup_id_t, event_id_t > EventHandlerIds;
@@ -66,11 +67,11 @@ class ProxyConnection {
     virtual std::future< CallStatus > sendMessageWithReplyAsync(
             const Message &message,
             std::unique_ptr< MessageReplyAsyncHandler > messageReplyAsyncHandler,
-			const CommonAPI::CallInfo *_info) const = 0;
+            const CommonAPI::CallInfo *_info) const = 0;
 
     virtual Message sendMessageWithReplyAndBlock(
             const Message& message,
-			const CommonAPI::CallInfo *_info) const = 0;
+            const CommonAPI::CallInfo *_info) const = 0;
 
     virtual bool sendEvent(
             const Message &message,
@@ -85,7 +86,8 @@ class ProxyConnection {
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler) = 0;
+            ProxyConnection::EventHandler* eventHandler,
+            major_version_t major) = 0;
 
     virtual void removeEventHandler(
             service_id_t serviceId,
@@ -102,21 +104,34 @@ class ProxyConnection {
             const Address &_address, AvailabilityHandlerId_t _handlerId) = 0;
 
     virtual void registerSubsciptionHandler(const Address &_address,
-    		const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) = 0;
+            const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) = 0;
 
     virtual void unregisterSubsciptionHandler(const Address &_address,
-    		const eventgroup_id_t _eventgroup) = 0;
+            const eventgroup_id_t _eventgroup) = 0;
 
     virtual void registerService(const Address &_address) = 0;
     virtual void unregisterService(const Address &_address) = 0;
 
     virtual void requestService(const Address &_address, bool _hasSelective = false) = 0;
 
+    virtual void registerEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) = 0;
+    virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event) = 0;
+
+    virtual void requestEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) = 0;
+    virtual void releaseEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event) = 0;
+
     virtual const std::shared_ptr<StubManager> getStubManager() = 0;
     virtual void setStubMessageHandler(std::function<bool(const Message&)> stubMessageHandler) = 0;
     virtual bool isStubMessageHandlerSet() = 0;
 
-    virtual void sendPendingSubscriptions(service_id_t serviceId, instance_id_t instanceId) const = 0;
+    virtual void sendPendingSubscriptions(service_id_t serviceId, instance_id_t instanceId) = 0;
+
+    virtual void getInitialEvent(service_id_t _service, instance_id_t _instance, Message _message,
+            EventHandler *_eventHandler, uint32_t _tag) = 0;
 };
 
 

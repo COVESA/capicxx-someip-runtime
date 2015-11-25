@@ -28,20 +28,24 @@ class Factory;
 
 class StubAdapter: virtual public CommonAPI::StubAdapter, public InterfaceHandler {
  public:
-	 COMMONAPI_EXPORT StubAdapter(const Address &_address,
+     COMMONAPI_EXPORT StubAdapter(const Address &_address,
                 const std::shared_ptr<ProxyConnection> &_connection);
 
-	 COMMONAPI_EXPORT virtual ~StubAdapter();
+     COMMONAPI_EXPORT virtual ~StubAdapter();
 
-	 COMMONAPI_EXPORT virtual void init(std::shared_ptr<StubAdapter> instance);
-	 COMMONAPI_EXPORT virtual void deinit();
+     COMMONAPI_EXPORT virtual void init(std::shared_ptr<StubAdapter> instance);
+     COMMONAPI_EXPORT virtual void deinit();
 
-	 COMMONAPI_EXPORT const Address &getSomeIpAddress() const;
-	 COMMONAPI_EXPORT const std::shared_ptr< ProxyConnection > & getConnection() const;
+     COMMONAPI_EXPORT const Address &getSomeIpAddress() const;
+     COMMONAPI_EXPORT const std::shared_ptr< ProxyConnection > & getConnection() const;
 
-	 COMMONAPI_EXPORT const bool isManagingInterface();
+     COMMONAPI_EXPORT bool isManagingInterface();
 
-	 COMMONAPI_EXPORT virtual bool onInterfaceMessage(const Message &message) = 0;
+     COMMONAPI_EXPORT void registerEvent(event_id_t _event, eventgroup_id_t _eventGroup,
+             bool _isField);
+     COMMONAPI_EXPORT void unregisterEvent(event_id_t _event);
+
+     COMMONAPI_EXPORT virtual bool onInterfaceMessage(const Message &message) = 0;
 
 protected:
     Address someipAddress_;

@@ -26,54 +26,54 @@ class Connection;
 class Watch : public CommonAPI::Watch {
  public:
     enum class commDirectionType : uint8_t {
-    	PROXYRECEIVE = 0x00,
+        PROXYRECEIVE = 0x00,
         STUBRECEIVE = 0x01,
     };
     typedef std::pair<std::shared_ptr<vsomeip::message>, commDirectionType> msgQueueEntry;
 
-	Watch(const std::shared_ptr<Connection>& _connection);
+    Watch(const std::shared_ptr<Connection>& _connection);
 
-	virtual ~Watch();
+    virtual ~Watch();
 
-	void dispatch(unsigned int eventFlags);
+    void dispatch(unsigned int eventFlags);
 
-	const pollfd& getAssociatedFileDescriptor();
+    const pollfd& getAssociatedFileDescriptor();
 
 #ifdef WIN32
-	const HANDLE& getAssociatedEvent();
+    const HANDLE& getAssociatedEvent();
 #endif
 
-	const std::vector<CommonAPI::DispatchSource*>& getDependentDispatchSources();
+    const std::vector<CommonAPI::DispatchSource*>& getDependentDispatchSources();
 
-	void addDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource);
+    void addDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource);
 
-	void removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource);
+    void removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource);
 
-	void pushQueue(msgQueueEntry _msgQueueEntry);
+    void pushQueue(msgQueueEntry _msgQueueEntry);
 
-	void popQueue();
+    void popQueue();
 
-	msgQueueEntry& frontQueue();
+    msgQueueEntry& frontQueue();
 
-	bool emptyQueue();
+    bool emptyQueue();
 
-	void processMsgQueueEntry(msgQueueEntry &_msgQueueEntry);
+    void processMsgQueueEntry(msgQueueEntry &_msgQueueEntry);
 
 private:
-	const int pipeValue_;
-	int pipeFileDescriptors_[2];
+    int pipeFileDescriptors_[2];
 
-	pollfd pollFileDescriptor_;
-	std::vector<CommonAPI::DispatchSource*> dependentDispatchSources_;
+    pollfd pollFileDescriptor_;
+    std::vector<CommonAPI::DispatchSource*> dependentDispatchSources_;
     std::queue<msgQueueEntry> msgQueue_;
 
     std::mutex msgQueueMutex_;
 
     std::shared_ptr<Connection> connection_;
 
+    const int pipeValue_;
 #ifdef WIN32
-	HANDLE wsaEvent_;
-	OVERLAPPED ov;
+    HANDLE wsaEvent_;
+    OVERLAPPED ov;
 #endif
 };
 

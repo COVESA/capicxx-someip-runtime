@@ -26,34 +26,44 @@ namespace SomeIP {
 class Address;
 
 class ProxyBase
-		: public virtual CommonAPI::Proxy {
+        : public virtual CommonAPI::Proxy {
  public:
-	 COMMONAPI_EXPORT ProxyBase(const std::shared_ptr<ProxyConnection> &connection);
-	 COMMONAPI_EXPORT virtual ~ProxyBase() {};
+     COMMONAPI_EXPORT ProxyBase(const std::shared_ptr<ProxyConnection> &connection);
+     COMMONAPI_EXPORT virtual ~ProxyBase() {};
 
-	 COMMONAPI_EXPORT virtual const Address &getSomeIpAddress() const = 0;
+     COMMONAPI_EXPORT virtual const Address &getSomeIpAddress() const = 0;
 
     inline const std::shared_ptr<ProxyConnection> & getConnection() const;
 
-	COMMONAPI_EXPORT Message createMethodCall(const method_id_t methodId, bool _reliable) const;
+    COMMONAPI_EXPORT Message createMethodCall(const method_id_t methodId, bool _reliable) const;
 
-	COMMONAPI_EXPORT void sendIdentifyRequest(Message& message);
+    COMMONAPI_EXPORT void sendIdentifyRequest(Message& message);
 
-	COMMONAPI_EXPORT void addEventHandler(
+    COMMONAPI_EXPORT void addEventHandler(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            eventgroup_id_t eventGroupId,
+            event_id_t eventId,
+            bool isField,
+            ProxyConnection::EventHandler* eventHandler,
+            major_version_t major);
+
+    COMMONAPI_EXPORT void removeEventHandler(
             service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
             ProxyConnection::EventHandler* eventHandler);
 
-	COMMONAPI_EXPORT void removeEventHandler(
-            service_id_t serviceId,
-            instance_id_t instanceId,
-            eventgroup_id_t eventGroupId,
-            event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler);
+    COMMONAPI_EXPORT void getInitialEvent(
+            service_id_t _service,
+            instance_id_t _instance,
+            Message _message,
+            ProxyConnection::EventHandler *eventHandler,
+            uint32_t _tag);
 
-	COMMONAPI_EXPORT virtual void init() = 0;
+
+    COMMONAPI_EXPORT virtual void init() = 0;
 
  protected:
     const std::string commonApiDomain_;

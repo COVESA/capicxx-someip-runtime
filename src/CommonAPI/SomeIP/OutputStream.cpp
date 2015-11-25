@@ -10,6 +10,7 @@
 #endif
 
 #include <CommonAPI/Logger.hpp>
+#include <CommonAPI/Version.hpp>
 #include <CommonAPI/SomeIP/OutputStream.hpp>
 #include <CommonAPI/SomeIP/StringEncoder.hpp>
 #include <bitset>
@@ -40,47 +41,47 @@ size_t OutputStream::popPosition() {
     return itsPosition;
 }
 
-OutputStream& OutputStream::writeValue(const bool &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const bool &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const int8_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const int8_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const int16_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const int16_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const int32_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const int32_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const int64_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const int64_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const uint8_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const uint8_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const uint16_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const uint16_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const uint32_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const uint32_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const uint64_t &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const uint64_t &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const float &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const float &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
-OutputStream& OutputStream::writeValue(const double &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const double &_value, const EmptyDeployment *) {
     return _writeValue(_value);
 }
 
@@ -134,11 +135,11 @@ OutputStream& OutputStream::_writeValueAt(const uint32_t &_value, const uint8_t 
     return (*this);
 }
 
-OutputStream& OutputStream::writeValue(const std::string &_value, const EmptyDeployment *_depl) {
+OutputStream& OutputStream::writeValue(const std::string &_value, const EmptyDeployment *) {
     bool errorOccurred = false;
     size_t stringLength = _value.size() + 1; //adding null termination
 
-    _writeValue(stringLength, 4);
+    _writeValue(uint32_t(stringLength), 4);
 
     if(!errorOccurred) {
         // Write string content
@@ -164,10 +165,14 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
         {
             case StringEncoding::UTF16BE:
                 encoder->utf8To16((byte_t *)_value.c_str(), BIG_ENDIAN, status, &bytes, stringLength);
+                delete[] bytes;
+                bytes = NULL;
                 break;
 
             case StringEncoding::UTF16LE:
                 encoder->utf8To16((byte_t *)_value.c_str(), LITTLE_ENDIAN, status, &bytes, stringLength);
+                delete[] bytes;
+                bytes = NULL;
                 break;
 
             default:
@@ -192,10 +197,10 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
                 errorOccurred = true;
             }
         } else {
-            _writeValue(stringLength, _depl->stringLengthWidth_);
+            _writeValue(uint32_t(stringLength), _depl->stringLengthWidth_);
         }
     } else {
-        _writeValue(stringLength, 4);
+        _writeValue(uint32_t(stringLength), 4);
     }
 
     if(!errorOccurred) {
@@ -206,13 +211,32 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
     return (*this);
 }
 
-OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const EmptyDeployment *_depl) {
-    // TODO: implement function
+OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const EmptyDeployment *) {
+    pushPosition();     // Start of length field
+    _writeValue(0, 4);  // Length field placeholder
+    pushPosition();     // Start of vector data
+
+    if (!hasError()) {
+        // Write array/vector content
+        for (auto i : _value) {
+            writeValue(i, nullptr);
+            if (hasError()) {
+                break;
+            }
+        }
+    }
+
+    // Write actual value of length field
+    size_t length = getPosition() - popPosition();
+    size_t position2Write = popPosition();
+    _writeValueAt(uint32_t(length), 4, uint32_t(position2Write));
+
     return (*this);
 }
 
-OutputStream& OutputStream::writeValue(const Version &_value, const EmptyDeployment *_depl) {
-    // TODO: implement function
+OutputStream& OutputStream::writeValue(const Version &_value, const EmptyDeployment *) {
+    _writeValue(_value.Major);
+    _writeValue(_value.Minor);
     return (*this);
 }
 
@@ -233,6 +257,10 @@ void OutputStream::align(const size_t _boundary) {
     _writeRaw(eightByteZeroString, necessary);
 }
 
+void OutputStream::_writeRaw(const byte_t &_data) {
+    payload_.push_back(_data);
+}
+
 void OutputStream::_writeRaw(const byte_t *_data, const size_t _size) {
     payload_.insert(payload_.end(), _data, _data + _size);
 }
@@ -244,6 +272,7 @@ void OutputStream::_writeRawAt(const byte_t *_data, const size_t _size, const si
 OutputStream& OutputStream::_writeString(const std::string &_value, const StringDeployment *_depl) {
     assert(_value.c_str()[_value.size()] == '\0');
 
+    bool converted = false;
     size_t stringLength;
     byte_t *bytes;
 
@@ -257,10 +286,12 @@ OutputStream& OutputStream::_writeString(const std::string &_value, const String
         {
             case StringEncoding::UTF16BE:
                 encoder->utf8To16((byte_t *)_value.c_str(), BIG_ENDIAN, status, &bytes, stringLength);
+                converted = true;
                 break;
 
             case StringEncoding::UTF16LE:
                 encoder->utf8To16((byte_t *)_value.c_str(), LITTLE_ENDIAN, status, &bytes, stringLength);
+                converted = true;
                 break;
 
             default:
@@ -282,14 +313,20 @@ OutputStream& OutputStream::_writeString(const std::string &_value, const String
 
     _writeRaw(bytes, stringLength);
 
+    if(converted)
+    {
+        delete[] bytes;
+        bytes = NULL;
+    }
+
     return (*this);
 }
 
 void OutputStream::flush() {
-    message_.setPayloadData((byte_t *)payload_.data(), payload_.size());
+    message_.setPayloadData((byte_t *)payload_.data(), uint32_t(payload_.size()));
 }
 
-void OutputStream::reserveMemory(size_t numOfBytes) {
+void OutputStream::reserveMemory(size_t) {
 }
 
 } // namespace SomeIP

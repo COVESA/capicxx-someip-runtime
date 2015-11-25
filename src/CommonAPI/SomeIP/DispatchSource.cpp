@@ -7,35 +7,41 @@
 
 #include <CommonAPI/SomeIP/Watch.hpp>
 #include <iostream>
+#include <thread>
+
 namespace CommonAPI {
 namespace SomeIP {
 
 DispatchSource::DispatchSource(const std::shared_ptr<Watch>& watch) :
-	watch_(watch) {
-	watch_->addDependentDispatchSource(this);
+    watch_(watch) {
+    watch_->addDependentDispatchSource(this);
 }
 
 DispatchSource::~DispatchSource() {
-	watch_->removeDependentDispatchSource(this);
+    std::unique_lock<std::mutex> itsLock(watchMutex_);
+    watch_->removeDependentDispatchSource(this);
 }
 
 bool DispatchSource::prepare(int64_t& timeout) {
-	timeout = -1;
-	return !watch_->emptyQueue();
+    std::unique_lock<std::mutex> itsLock(watchMutex_);
+    timeout = -1;
+    return !watch_->emptyQueue();
 }
 
 bool DispatchSource::check() {
-	return !watch_->emptyQueue();
+    std::unique_lock<std::mutex> itsLock(watchMutex_);
+    return !watch_->emptyQueue();
 }
 
 bool DispatchSource::dispatch() {
-	if (!watch_->emptyQueue()) {
-		auto msgQueueEntry = watch_->frontQueue();
-		watch_->popQueue();
-		watch_->processMsgQueueEntry(msgQueueEntry);
-	}
+    std::unique_lock<std::mutex> itsLock(watchMutex_);
+    if (!watch_->emptyQueue()) {
+        auto msgQueueEntry = watch_->frontQueue();
+        watch_->popQueue();
+        watch_->processMsgQueueEntry(msgQueueEntry);
+    }
 
-	return !watch_->emptyQueue();
+    return !watch_->emptyQueue();
 }
 
 } // namespace SomeIP

@@ -44,18 +44,18 @@ struct AttributeDispatcherStruct {
 
 typedef std::unordered_map<std::string, AttributeDispatcherStruct> StubAttributeTable;
 
-template < typename _StubClass >
+template < typename StubClass_ >
 class StubAdapterHelper: public virtual StubAdapter {
  public:
-    typedef typename _StubClass::StubAdapterType StubAdapterType;
-    typedef typename _StubClass::RemoteEventHandlerType RemoteEventHandlerType;
+    typedef typename StubClass_::StubAdapterType StubAdapterType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
 
     class StubDispatcher: public StubDispatcherBase {
      public:
-		virtual ~StubDispatcher() {}
+        virtual ~StubDispatcher() {}
         virtual bool dispatchMessage(const Message &_message,
-        							 const std::shared_ptr<_StubClass> &_stub,
-        							 StubAdapterHelper<_StubClass> &_helper) = 0;
+                                     const std::shared_ptr<StubClass_> &_stub,
+                                     StubAdapterHelper<StubClass_> &_helper) = 0;
     };
 
     // interfaceMemberName, interfaceMemberSignature
@@ -65,7 +65,7 @@ class StubAdapterHelper: public virtual StubAdapter {
  public:
     StubAdapterHelper(const Address &_address,
                       const std::shared_ptr< ProxyConnection > &_connection,
-                      const std::shared_ptr< _StubClass > &_stub)
+                      const std::shared_ptr< StubClass_ > &_stub)
         : StubAdapter(_address, _connection),
           stub_(_stub),
           remoteEventHandler_(nullptr) {
@@ -79,7 +79,7 @@ class StubAdapterHelper: public virtual StubAdapter {
     virtual void init(std::shared_ptr<StubAdapter> instance) {
         StubAdapter::init(instance);
         std::shared_ptr<StubAdapterType> stubAdapter
-        	= std::dynamic_pointer_cast<StubAdapterType>(instance);
+            = std::dynamic_pointer_cast<StubAdapterType>(instance);
         remoteEventHandler_ = stub_->initStubAdapter(stubAdapter);
     }
 
@@ -99,8 +99,13 @@ class StubAdapterHelper: public virtual StubAdapter {
 
         auto findIterator = getStubDispatcherTable().find(methodId);
         const bool foundInterfaceMemberHandler = (findIterator != getStubDispatcherTable().end());
-        bool isMessageHandled = false;
+        if (!foundInterfaceMemberHandler) {
+            auto error = message.createErrorResponseMessage(return_code_e::E_UNKNOWN_METHOD);
+            connection_->sendMessage(error);
+            return true;
+        }
 
+        bool isMessageHandled = false;
         //To prevent the destruction of the stub whilst still handling a message
         if (stub_ && foundInterfaceMemberHandler) {
             StubDispatcher *stubDispatcher = static_cast< StubDispatcher * >(findIterator->second);
@@ -112,26 +117,26 @@ class StubAdapterHelper: public virtual StubAdapter {
 
     virtual const StubDispatcherTable& getStubDispatcherTable() = 0;
 
-    std::shared_ptr<_StubClass> stub_;
+    std::shared_ptr<StubClass_> stub_;
     RemoteEventHandlerType *remoteEventHandler_;
 };
 
 template <class>
 struct StubEventHelper;
 
-template <template <class ...> class _In, class... _InArgs>
-struct StubEventHelper<_In<_InArgs...>> {
+template <template <class ...> class In_, class... InArgs_>
+struct StubEventHelper<In_<InArgs_...>> {
 
     static inline bool sendEvent(const Address &_address,
                                  const event_id_t &_event,
                                  const std::shared_ptr<ProxyConnection> &_connection,
-                                 const _InArgs&... _in) {
+                                 const InArgs_&... _in) {
 
         Message message = Message::createNotificationMessage(_address, _event, false);
 
-        if (sizeof...(_InArgs) > 0) {
+        if (sizeof...(InArgs_) > 0) {
             OutputStream output(message);
-            if (!SerializableArguments<_InArgs...>::serialize(output, _in...)) {
+            if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
                 COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper: serialization failed!");
                 return false;
             }
@@ -141,28 +146,28 @@ struct StubEventHelper<_In<_InArgs...>> {
         return _connection->sendEvent(message);
     }
 
-    template <typename _Stub = StubAdapter>
-    static bool sendEvent(const _Stub &_stub,
+    template <typename Stub_ = StubAdapter>
+    static bool sendEvent(const Stub_ &_stub,
                           const event_id_t &_event,
-                          const _InArgs&... _in) {
+                          const InArgs_&... _in) {
         return (sendEvent(_stub.getSomeIpAddress(),
                           _event,
                           _stub.getConnection(),
                           _in...));
     }
 
-    template <typename _Stub = StubAdapter>
+    template <typename Stub_ = StubAdapter>
     static bool sendEvent(const client_id_t _client,
-    					  const _Stub &_stub,
+                          const Stub_ &_stub,
                           const event_id_t &_event,
-                          const _InArgs&... _in) {
+                          const InArgs_&... _in) {
 
         Message message = Message::createNotificationMessage(
                 _stub.getSomeIpAddress(), _event, false);
 
-        if (sizeof...(_InArgs) > 0) {
+        if (sizeof...(InArgs_) > 0) {
             OutputStream output(message);
-            if (!SerializableArguments<_InArgs...>::serialize(output, _in...)) {
+            if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
                 return false;
             }
             output.flush();
@@ -176,63 +181,63 @@ template<class, class, class>
 class MethodStubDispatcher;
 
 template <
-    typename _StubClass,
-    template <class...> class _In, class... _InArgs,
-	template <class...> class _DeplIn, class... _DeplInArgs>
-class MethodStubDispatcher<_StubClass, _In<_InArgs...>, _DeplIn<_DeplInArgs...>>
-	: public StubAdapterHelper<_StubClass>::StubDispatcher {
+    typename StubClass_,
+    template <class...> class In_, class... InArgs_,
+    template <class...> class DeplIn_, class... DeplInArgs_>
+class MethodStubDispatcher<StubClass_, In_<InArgs_...>, DeplIn_<DeplInArgs_...>>
+    : public StubAdapterHelper<StubClass_>::StubDispatcher {
 public:
-    typedef StubAdapterHelper<_StubClass> StubAdapterHelperType;
-    typedef void (_StubClass::*_StubFunctor)(std::shared_ptr<CommonAPI::ClientId>, _InArgs...);
+    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_...);
 
     MethodStubDispatcher(
-    	_StubFunctor stubFunctor, std::tuple<_DeplInArgs*...> _in)
+        StubFunctor_ stubFunctor, std::tuple<DeplInArgs_*...> _in)
         : stubFunctor_(stubFunctor) {
 
-    	initialize(typename make_sequence_range<sizeof...(_DeplInArgs), 0>::type(), _in);
+        initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
 
     bool dispatchMessage(const Message &_message,
-    					 const std::shared_ptr<_StubClass> &_stub,
-						 StubAdapterHelperType &_adapterHelper) {
+                         const std::shared_ptr<StubClass_> &_stub,
+                         StubAdapterHelperType &_adapterHelper) {
         return dispatchMessageHelper(
                     _message, _stub, _adapterHelper,
-                    typename make_sequence_range<sizeof...(_InArgs), 0>::type());
+                    typename make_sequence_range<sizeof...(InArgs_), 0>::type());
     }
 
 private:
-	template <int... _DeplInArgIndices>
-	inline void initialize(index_sequence<_DeplInArgIndices...>, std::tuple<_DeplInArgs*...> &_in) {
-		in_ = std::make_tuple(std::get<_DeplInArgIndices>(_in)...);
-	}
+    template <int... DeplInArgIndices_>
+    inline void initialize(index_sequence<DeplInArgIndices_...>, std::tuple<DeplInArgs_*...> &_in) {
+        in_ = std::make_tuple(std::get<DeplInArgIndices_>(_in)...);
+    }
 
-    template <int... _InArgIndices>
+    template <int... InArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
-                              		  const std::shared_ptr<_StubClass> &_stub,
-                              		  StubAdapterHelperType &_adapterHelper,
-									  index_sequence<_InArgIndices...>) {
+                                        const std::shared_ptr<StubClass_> &_stub,
+                                        StubAdapterHelperType &_adapterHelper,
+                                      index_sequence<InArgIndices_...>) {
 
-        if (sizeof...(_DeplInArgs) > 0) {
+        if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message);
-			if (!SerializableArguments<CommonAPI::Deployable<_InArgs, _DeplInArgs>...>::deserialize(
-					inputStream, std::get<_InArgIndices>(in_)...))
+            if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
+                    inputStream, std::get<InArgIndices_>(in_)...))
                 return false;
         }
 
         std::shared_ptr<ClientId> client
-			= std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId());
 
         (_stub.get()->*stubFunctor_)(
-        	client,
-        	std::move(std::get<_InArgIndices>(in_))...
+            client,
+            std::move(std::get<InArgIndices_>(in_))...
         );
 
-       	return true;
-	}
+           return true;
+    }
 
-    _StubFunctor stubFunctor_;
+    StubFunctor_ stubFunctor_;
 
-    std::tuple<CommonAPI::Deployable<_InArgs, _DeplInArgs>...> in_;
+    std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
 };
 
 
@@ -240,69 +245,76 @@ template<class, class, class, class, class>
 class MethodWithReplyStubDispatcher;
 
 template <
-    typename _StubClass,
-    template <class...> class _In, class... _InArgs,
-    template <class...> class _Out, class... _OutArgs,
-	template <class...> class _DeplIn, class... _DeplInArgs,
-	template <class...> class _DeplOut, class... _DeplOutArgs>
-class MethodWithReplyStubDispatcher<_StubClass, _In<_InArgs...>, _Out<_OutArgs...>, _DeplIn<_DeplInArgs...>, _DeplOut<_DeplOutArgs...>>
-	: public StubAdapterHelper<_StubClass>::StubDispatcher {
+    typename StubClass_,
+    template <class...> class In_, class... InArgs_,
+    template <class...> class Out_, class... OutArgs_,
+    template <class...> class DeplIn_, class... DeplInArgs_,
+    template <class...> class DeplOut_, class... DeplOutArgs_>
+class MethodWithReplyStubDispatcher<StubClass_, In_<InArgs_...>, Out_<OutArgs_...>, DeplIn_<DeplInArgs_...>, DeplOut_<DeplOutArgs_...>>
+    : public StubAdapterHelper<StubClass_>::StubDispatcher {
 public:
-    typedef StubAdapterHelper<_StubClass> StubAdapterHelperType;
-    typedef std::function<void (_OutArgs...)> ReplyType_t;
-    typedef void (_StubClass::*_StubFunctor)(std::shared_ptr<CommonAPI::ClientId>, _InArgs..., ReplyType_t);
+    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef std::function<void (OutArgs_...)> ReplyType_t;
+    typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., ReplyType_t);
 
     MethodWithReplyStubDispatcher(
-    	_StubFunctor stubFunctor, std::tuple<_DeplInArgs*...> _in, std::tuple<_DeplOutArgs*...> _out)
+        StubFunctor_ stubFunctor, std::tuple<DeplInArgs_*...> _in, std::tuple<DeplOutArgs_*...> _out)
         : stubFunctor_(stubFunctor), out_(_out) {
 
-    	initialize(typename make_sequence_range<sizeof...(_DeplInArgs), 0>::type(), _in);
+        initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
 
     bool dispatchMessage(const Message &_message,
-    					 const std::shared_ptr<_StubClass> &_stub,
-						 StubAdapterHelperType &_adapterHelper) {
-		connection_ = _adapterHelper.getConnection();
+                         const std::shared_ptr<StubClass_> &_stub,
+                         StubAdapterHelperType &_adapterHelper) {
+        connection_ = _adapterHelper.getConnection();
         return dispatchMessageHelper(
                     _message, _stub, _adapterHelper,
-                    typename make_sequence_range<sizeof...(_InArgs), 0>::type(),
-                    typename make_sequence_range<sizeof...(_OutArgs), 0>::type());
+                    typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
+                    typename make_sequence_range<sizeof...(OutArgs_), 0>::type());
     }
 
-	bool sendReplyMessage(CommonAPI::CallId_t _call,
-						  std::tuple<CommonAPI::Deployable<_OutArgs, _DeplOutArgs>...> _args = std::make_tuple()) {
-		return sendReplyMessageHelper(_call, typename make_sequence_range<sizeof...(_OutArgs), 0>::type(), _args);
-	}
+    bool sendReplyMessage(CommonAPI::CallId_t _call,
+                          std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args = std::make_tuple()) {
+        return sendReplyMessageHelper(_call, typename make_sequence_range<sizeof...(OutArgs_), 0>::type(), _args);
+    }
 
 private:
-	template <int... _DeplInArgIndices>
-	inline void initialize(index_sequence<_DeplInArgIndices...>, std::tuple<_DeplInArgs*...> &_in) {
-		in_ = std::make_tuple(std::get<_DeplInArgIndices>(_in)...);
-	}
+    template <int... DeplInArgIndices_>
+    inline void initialize(index_sequence<DeplInArgIndices_...>, std::tuple<DeplInArgs_*...> &_in) {
+        in_ = std::make_tuple(std::get<DeplInArgIndices_>(_in)...);
+    }
 
-    template <int... _InArgIndices, int... _OutArgIndices>
+    template <int... InArgIndices_, int... OutArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
-                              		  const std::shared_ptr<_StubClass> &_stub,
-                              		  StubAdapterHelperType &_adapterHelper,
-		                              index_sequence<_InArgIndices...>,
-        		                      index_sequence<_OutArgIndices...>) {
+                                        const std::shared_ptr<StubClass_> &_stub,
+                                        StubAdapterHelperType &_adapterHelper,
+                                      index_sequence<InArgIndices_...>,
+                                      index_sequence<OutArgIndices_...>) {
+        (void)_adapterHelper;
 
-        if (sizeof...(_DeplInArgs) > 0) {
+        if (!_message.isRequestType()) {
+            auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
+            connection_->sendMessage(error);
+            return true;
+        }
+
+        if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message);
-			if (!SerializableArguments<CommonAPI::Deployable<_InArgs, _DeplInArgs>...>::deserialize(
-					inputStream, std::get<_InArgIndices>(in_)...))
+            if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
+                    inputStream, std::get<InArgIndices_>(in_)...))
                 return false;
         }
 
         std::shared_ptr<ClientId> client
-			= std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId());
         Message reply = _message.createResponseMessage();
 
         CommonAPI::CallId_t call;
         {
-        	std::lock_guard<std::mutex> lock(mutex_);
-        	call = currentCall_++;
-        	pending_[call] = reply;
+            std::lock_guard<std::mutex> lock(mutex_);
+            call = currentCall_++;
+            pending_[call] = reply;
         }
 
         // Call the stub function with the list of deserialized in-Parameters
@@ -310,114 +322,123 @@ private:
         // for the out-Parameters and extracts them from the deployables before
         // calling the send function.
         (_stub.get()->*stubFunctor_)(
-        	client,
-        	std::move(std::get<_InArgIndices>(in_).getValue())...,
-        	[call, this](_OutArgs... _args) {
-        		this->sendReplyMessage(
-        			call,
-        			std::make_tuple(
-        				CommonAPI::Deployable<_OutArgs, _DeplOutArgs>(
-        					_args, std::get<_OutArgIndices>(out_)
-						)...
-					)
-        		);
-        	}
+            client,
+            std::move(std::get<InArgIndices_>(in_).getValue())...,
+            [call, this](OutArgs_... _args) {
+                this->sendReplyMessage(
+                    call,
+                    std::make_tuple(
+                        CommonAPI::Deployable<OutArgs_, DeplOutArgs_>(
+                            _args, std::get<OutArgIndices_>(out_)
+                        )...
+                    )
+                );
+            }
         );
 
         return true;
-	}
-
-    template<int... _OutArgIndices>
-    bool sendReplyMessageHelper(CommonAPI::CallId_t _call,
-    					   	    index_sequence<_OutArgIndices...>,
-								std::tuple<CommonAPI::Deployable<_OutArgs, _DeplOutArgs>...> _args) {
-		std::lock_guard<std::mutex> lock(mutex_);
-		auto reply = pending_.find(_call);
-		if (reply != pending_.end()) {
-			if (sizeof...(_DeplOutArgs) > 0) {
-				OutputStream output(reply->second);
-				if (!SerializableArguments<CommonAPI::Deployable<_OutArgs, _DeplOutArgs>...>::serialize(
-						output, std::get<_OutArgIndices>(_args)...)) {
-					pending_.erase(_call);
-					return false;
-				}
-				output.flush();
-			}
-		} else {
-			return false;
-		}
-		bool isSuccessful = connection_->sendMessage(reply->second);
-		pending_.erase(_call);
-		return isSuccessful;
     }
 
-    _StubFunctor stubFunctor_;
+    template<int... OutArgIndices_>
+    bool sendReplyMessageHelper(CommonAPI::CallId_t _call,
+                                   index_sequence<OutArgIndices_...>,
+                                std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args) {
+        (void)_args;
 
-    std::tuple<CommonAPI::Deployable<_InArgs, _DeplInArgs>...> in_;
-    std::tuple<_DeplOutArgs*...> out_;
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto reply = pending_.find(_call);
+        if (reply != pending_.end()) {
+            if (sizeof...(DeplOutArgs_) > 0) {
+                OutputStream output(reply->second);
+                if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
+                        output, std::get<OutArgIndices_>(_args)...)) {
+                    pending_.erase(_call);
+                    return false;
+                }
+                output.flush();
+            }
+        } else {
+            return false;
+        }
+        bool isSuccessful = connection_->sendMessage(reply->second);
+        pending_.erase(_call);
+        return isSuccessful;
+    }
 
-	CommonAPI::CallId_t currentCall_;
-	std::map<CommonAPI::CallId_t, Message> pending_;
-	std::mutex mutex_; // protects pending_
+    StubFunctor_ stubFunctor_;
 
-	std::shared_ptr<ProxyConnection> connection_;
+    std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
+    std::tuple<DeplOutArgs_*...> out_;
+
+    CommonAPI::CallId_t currentCall_;
+    std::map<CommonAPI::CallId_t, Message> pending_;
+    std::mutex mutex_; // protects pending_
+
+    std::shared_ptr<ProxyConnection> connection_;
 };
 
 template<class, class, class, class>
 class MethodWithReplyAdapterDispatcher;
 
 template <
-    typename _StubClass,
-    typename _StubAdapterClass,
-    template <class...> class _In, class... _InArgs,
-    template <class...> class _Out, class... _OutArgs>
-class MethodWithReplyAdapterDispatcher<_StubClass, _StubAdapterClass, _In<_InArgs...>, _Out<_OutArgs...>>
-    : public StubAdapterHelper<_StubClass>::StubDispatcher {
+    typename StubClass_,
+    typename StubAdapterClass_,
+    template <class...> class In_, class... InArgs_,
+    template <class...> class Out_, class... OutArgs_>
+class MethodWithReplyAdapterDispatcher<StubClass_, StubAdapterClass_, In_<InArgs_...>, Out_<OutArgs_...>>
+    : public StubAdapterHelper<StubClass_>::StubDispatcher {
 
 public:
-    typedef StubAdapterHelper<_StubClass> StubAdapterHelperType;
-    typedef void (_StubAdapterClass::*_StubFunctor)(std::shared_ptr<CommonAPI::ClientId>, _InArgs..., _OutArgs&...);
-    typedef typename CommonAPI::Stub<typename StubAdapterHelperType::StubAdapterType, typename _StubClass::RemoteEventType> StubType;
+    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef void (StubAdapterClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., OutArgs_&...);
+    typedef typename CommonAPI::Stub<typename StubAdapterHelperType::StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
-    MethodWithReplyAdapterDispatcher(_StubFunctor stubFunctor)
+    MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor)
         : stubFunctor_(stubFunctor) {
     }
 
-    bool dispatchMessage(const Message &_message, const std::shared_ptr<_StubClass> &_stub, StubAdapterHelperType &_adapterHelper) {
-		std::tuple<_InArgs..., _OutArgs...> argTuple;
+    bool dispatchMessage(const Message &_message, const std::shared_ptr<StubClass_> &_stub, StubAdapterHelperType &_adapterHelper) {
+        std::tuple<InArgs_..., OutArgs_...> argTuple;
         return dispatchMessageHelper(
                         _message,
                         _stub,
                         _adapterHelper,
-                        typename make_sequence_range<sizeof...(_InArgs), 0>::type(),
-                        typename make_sequence_range<sizeof...(_OutArgs), sizeof...(_InArgs)>::type(),
-						argTuple);
+                        typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
+                        typename make_sequence_range<sizeof...(OutArgs_), sizeof...(InArgs_)>::type(),
+                        argTuple);
     }
 
  private:
-    template <int... _InArgIndices, int... _OutArgIndices>
+    template <int... InArgIndices_, int... OutArgIndices_>
     inline bool dispatchMessageHelper(
-						const Message &_message,
-                        const std::shared_ptr<_StubClass> &_stub,
+                        const Message &_message,
+                        const std::shared_ptr<StubClass_> &_stub,
                         StubAdapterHelperType &_adapterHelper,
-                        index_sequence<_InArgIndices...>,
-                        index_sequence<_OutArgIndices...>,
-						std::tuple<_InArgs..., _OutArgs...> _argTuple) const {
-        if (sizeof...(_InArgs) > 0) {
+                        index_sequence<InArgIndices_...>,
+                        index_sequence<OutArgIndices_...>,
+                        std::tuple<InArgs_..., OutArgs_...> _argTuple) const {
+
+        if (!_message.isRequestType()) {
+            auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
+            _adapterHelper.getConnection()->sendMessage(error);
+            return true;
+        } 
+
+       if (sizeof...(InArgs_) > 0) {
             InputStream inputStream(_message);
-			if (!SerializableArguments<_InArgs...>::deserialize(inputStream, std::get<_InArgIndices>(_argTuple)...))
+            if (!SerializableArguments<InArgs_...>::deserialize(inputStream, std::get<InArgIndices_>(_argTuple)...))
                 return false;
         }
 
         std::shared_ptr<ClientId> client
-			= std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId());
 
-        (_stub->StubType::getStubAdapter().get()->*stubFunctor_)(client, std::move(std::get<_InArgIndices>(_argTuple))..., std::get<_OutArgIndices>(_argTuple)...);
+        (_stub->StubType::getStubAdapter().get()->*stubFunctor_)(client, std::move(std::get<InArgIndices_>(_argTuple))..., std::get<OutArgIndices_>(_argTuple)...);
         Message reply = _message.createResponseMessage();
 
-        if (sizeof...(_OutArgs) > 0) {
+        if (sizeof...(OutArgs_) > 0) {
            OutputStream outputStream(reply);
-            if (!SerializableArguments<_OutArgs...>::serialize(outputStream, std::get<_OutArgIndices>(_argTuple)...))
+            if (!SerializableArguments<OutArgs_...>::serialize(outputStream, std::get<OutArgIndices_>(_argTuple)...))
                 return false;
 
             outputStream.flush();
@@ -426,62 +447,62 @@ public:
         return _adapterHelper.getConnection()->sendMessage(reply);
     }
 
-    _StubFunctor stubFunctor_;
+    StubFunctor_ stubFunctor_;
 };
 
 
-template <typename _StubClass, typename _AttributeType, typename _AttributeDepl = EmptyDeployment>
-class GetAttributeStubDispatcher: public StubAdapterHelper<_StubClass>::StubDispatcher {
+template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
+class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDispatcher {
  public:
-    typedef StubAdapterHelper<_StubClass> StubAdapterHelperType;
-    typedef const _AttributeType& (_StubClass::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
+    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
 
-    GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, _AttributeDepl *_depl = nullptr)
+    GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, AttributeDepl_ *_depl = nullptr)
         : getStubFunctor_(getStubFunctor), depl_(_depl) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<_StubClass> &stub, StubAdapterHelperType &stubAdapterHelper) {
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
         return sendAttributeValueReply(message, stub, stubAdapterHelper);
     }
 
  protected:
-    inline bool sendAttributeValueReply(const Message &message, const std::shared_ptr<_StubClass>& stub, StubAdapterHelperType& stubAdapterHelper) {
+    inline bool sendAttributeValueReply(const Message &message, const std::shared_ptr<StubClass_>& stub, StubAdapterHelperType& stubAdapterHelper) {
         Message reply = message.createResponseMessage();
         OutputStream outputStream(reply);
 
         std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
 
-        outputStream << CommonAPI::Deployable<_AttributeType, _AttributeDepl>((stub.get()->*getStubFunctor_)(clientId), depl_);
+        outputStream << CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
         outputStream.flush();
 
         return stubAdapterHelper.getConnection()->sendMessage(reply);
     }
 
     GetStubFunctor getStubFunctor_;
-    _AttributeDepl *depl_;
+    AttributeDepl_ *depl_;
 };
 
 
-template <typename _StubClass, typename _AttributeType, typename _AttributeDepl = EmptyDeployment>
-class SetAttributeStubDispatcher: public GetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl> {
+template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
+class SetAttributeStubDispatcher: public GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_> {
 public:
-    typedef typename GetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::StubAdapterHelperType StubAdapterHelperType;
+    typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::StubAdapterHelperType StubAdapterHelperType;
     typedef typename StubAdapterHelperType::RemoteEventHandlerType RemoteEventHandlerType;
 
-    typedef typename GetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::GetStubFunctor GetStubFunctor;
-    typedef bool (RemoteEventHandlerType::*OnRemoteSetFunctor)(std::shared_ptr<CommonAPI::ClientId>, _AttributeType);
+    typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
+    typedef bool (RemoteEventHandlerType::*OnRemoteSetFunctor)(std::shared_ptr<CommonAPI::ClientId>, AttributeType_);
     typedef void (RemoteEventHandlerType::*OnRemoteChangedFunctor)();
 
     SetAttributeStubDispatcher(GetStubFunctor getStubFunctor,
                                OnRemoteSetFunctor onRemoteSetFunctor,
                                OnRemoteChangedFunctor onRemoteChangedFunctor,
-                               _AttributeDepl *_depl = nullptr)
-        : GetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>(getStubFunctor, _depl),
+                               AttributeDepl_ *_depl = nullptr)
+        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor, _depl),
           onRemoteSetFunctor_(onRemoteSetFunctor),
           onRemoteChangedFunctor_(onRemoteChangedFunctor) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<_StubClass> &stub, StubAdapterHelperType &stubAdapterHelper) {
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
         bool attributeValueChanged;
 
         if (!setAttributeValue(message, stub, stubAdapterHelper, attributeValueChanged)) {
@@ -497,11 +518,11 @@ public:
 
  protected:
     inline bool setAttributeValue(const Message &message,
-                                  const std::shared_ptr<_StubClass>& stub,
+                                  const std::shared_ptr<StubClass_>& stub,
                                   StubAdapterHelperType& stubAdapterHelper,
                                   bool& attributeValueChanged) {
         InputStream inputStream(message);
-        CommonAPI::Deployable<_AttributeType, _AttributeDepl> attributeValue(this->depl_);
+        CommonAPI::Deployable<AttributeType_, AttributeDepl_> attributeValue(this->depl_);
         inputStream >> attributeValue;
         if (inputStream.hasError()) {
             return false;
@@ -518,7 +539,7 @@ public:
         (stubAdapterHelper.getRemoteEventHandler()->*onRemoteChangedFunctor_)();
     }
 
-    inline const _AttributeType& getAttributeValue(std::shared_ptr<CommonAPI::ClientId> clientId, const std::shared_ptr<_StubClass> &stub) {
+    inline const AttributeType_& getAttributeValue(std::shared_ptr<CommonAPI::ClientId> clientId, const std::shared_ptr<StubClass_> &stub) {
         return (stub.get()->*(this->getStubFunctor_))(clientId);
     }
 
@@ -527,31 +548,31 @@ public:
 };
 
 
-template <typename _StubClass, typename _AttributeType, typename _AttributeDepl = EmptyDeployment>
-class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl> {
+template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
+class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_> {
  public:
-    typedef typename SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::StubAdapterHelperType StubAdapterHelperType;
+    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::StubAdapterHelperType StubAdapterHelperType;
     typedef typename StubAdapterHelperType::StubAdapterType StubAdapterType;
 
-    typedef typename SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::GetStubFunctor GetStubFunctor;
-    typedef typename SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::OnRemoteSetFunctor OnRemoteSetFunctor;
-    typedef typename SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>::OnRemoteChangedFunctor OnRemoteChangedFunctor;
-    typedef typename CommonAPI::Stub<StubAdapterType, typename _StubClass::RemoteEventType> StubType;
-    typedef void (StubAdapterType::*FireChangedFunctor)(const _AttributeType&);
+    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
+    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteSetFunctor OnRemoteSetFunctor;
+    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteChangedFunctor OnRemoteChangedFunctor;
+    typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
+    typedef void (StubAdapterType::*FireChangedFunctor)(const AttributeType_&);
 
     SetObservableAttributeStubDispatcher(GetStubFunctor getStubFunctor,
                                          OnRemoteSetFunctor onRemoteSetFunctor,
                                          OnRemoteChangedFunctor onRemoteChangedFunctor,
                                          FireChangedFunctor fireChangedFunctor,
-                                         _AttributeDepl *_depl = nullptr)
-        : SetAttributeStubDispatcher<_StubClass, _AttributeType, _AttributeDepl>(getStubFunctor,
+                                         AttributeDepl_ *_depl = nullptr)
+        : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor,
                                                                  onRemoteSetFunctor,
                                                                  onRemoteChangedFunctor,
                                                                  _depl),
                     fireChangedFunctor_(fireChangedFunctor) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<_StubClass> &stub, StubAdapterHelperType &stubAdapterHelper) {
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
         bool attributeValueChanged;
         if (!this->setAttributeValue(message, stub, stubAdapterHelper, attributeValueChanged)) {
             return false;
@@ -566,8 +587,9 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<_S
     }
 
  private:
-    inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> clientId, StubAdapterHelperType& stubAdapterHelper, const std::shared_ptr<_StubClass> stub) {
-        (stub->StubType::getStubAdapter().get()->*fireChangedFunctor_)(this->getAttributeValue(clientId, stub));
+    inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> _client, StubAdapterHelperType &_helper, const std::shared_ptr<StubClass_> _stub) {
+        (void)_helper;
+        (_stub->StubType::getStubAdapter().get()->*fireChangedFunctor_)(this->getAttributeValue(_client, _stub));
     }
 
     const FireChangedFunctor fireChangedFunctor_;

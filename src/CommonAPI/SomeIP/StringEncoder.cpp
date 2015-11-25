@@ -8,11 +8,11 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-const uint16_t HIGH_SURROGATE_LEAD  = 0xd800u;  // 1101 1000 0000 0000
-const uint16_t LOW_SURROGATE_LEAD   = 0xdc00u;  // 1101 1100 0000 0000
-const uint16_t SURROGATE_MIN        = 0xd800u;
-const uint16_t SURROGATE_MAX        = 0xdfffu;
-const uint32_t CODE_POINT_MAX       = 0x0010ffffu;
+const uint16_t HIGH_SURROGATE_LEAD  = 0xd800;  // 1101 1000 0000 0000
+const uint16_t LOW_SURROGATE_LEAD   = 0xdc00;  // 1101 1100 0000 0000
+const uint16_t SURROGATE_MIN        = 0xd800;
+const uint16_t SURROGATE_MAX        = 0xdfff;
+const uint32_t CODE_POINT_MAX       = 0x0010ffff;
 const uint16_t UNICODE_MAX          = 0xffff;
 
 void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, EncodingStatus &_status, byte_t **_result, size_t &_length)
@@ -20,7 +20,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
     _status = EncodingStatus::SUCCESS;
     bytes_t bytes;
     int i = 0;
-    while (i < _size)
+    while (i < int(_size))
     {
         uint32_t firstByte = *_utf16Str & 0xff;
 
@@ -39,7 +39,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
         else if (_endianess == LITTLE_ENDIAN)
             codePoint = secondByte << 8 | firstByte;
 
-        if (isSurrogate(codePoint))
+        if (isSurrogate(uint16_t(codePoint)))
         {
             uint32_t firstSurrogate = codePoint;
             uint32_t firstSurrogateNoLead = firstSurrogate & 0x3ff; // mask leading surrogate sequence
@@ -68,7 +68,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
             else if (_endianess == LITTLE_ENDIAN)
                 secondSurrogate = fourthByte << 8 | thirdByte;
 
-            if (isSurrogate(secondSurrogate))
+            if (isSurrogate(uint16_t(secondSurrogate)))
             {
                 uint32_t secondSurrogateNoLead = secondSurrogate & 0x3ff;// mask leading surrogate sequence
 
@@ -105,7 +105,6 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
     tmp[_length-1] = '\0';
 
     *_result = tmp;
-    tmp = NULL;
 }
 
 void StringEncoder::utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_status, byte_t **_result, size_t &_length)
@@ -126,12 +125,12 @@ void StringEncoder::utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_
             //split 20 Bits value. 1-10 bits = part of low surrogate. 11-20 bits = part of high surrogate
 
             //high surrogate: shift with 10 and add high surrogate lead 110111
-            uint16_t highSurrogate = static_cast<uint16_t>(base >> 10)
-                    + HIGH_SURROGATE_LEAD;
+            uint16_t highSurrogate = static_cast<uint16_t>((base >> 10)
+                    + HIGH_SURROGATE_LEAD);
 
             //low surrogate: mask last 10 bits and add low surrogate lead 110110
-            uint16_t lowSurrogate = static_cast<uint16_t>(base & 0x3ff)
-                    + LOW_SURROGATE_LEAD;
+            uint16_t lowSurrogate = static_cast<uint16_t>((base & 0x3ff)
+                    + LOW_SURROGATE_LEAD);
 
             if (_endianess == BIG_ENDIAN)
             {
@@ -170,7 +169,6 @@ void StringEncoder::utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_
         j++;
     }
     *_result = tmp;
-    tmp = NULL;
 }
 
 bool StringEncoder::isUtf8Valid(byte_t *_utf8Str)
@@ -198,7 +196,7 @@ bool StringEncoder::isSurrogate(uint16_t _codePoint)
 
 bool StringEncoder::isCodePointValid(uint32_t _codePoint)
 {
-    return (_codePoint <= CODE_POINT_MAX && !isSurrogate(_codePoint));
+    return (_codePoint <= CODE_POINT_MAX && !isSurrogate(uint16_t(_codePoint)));
 }
 
 bool StringEncoder::isSequenceTooLong(uint32_t _codePoint, int _size)
@@ -240,7 +238,7 @@ bool StringEncoder::nextUtf16(byte_t **_bytes, int &_index, size_t _length, Enco
 {
     (*_bytes)++;
     _index++;
-    if (_index > _length)
+    if (_index > int(_length))
     {
         _status = EncodingStatus::INVALID_UTF16;
         return false;
@@ -416,7 +414,7 @@ bytes_t StringEncoder::push(uint32_t _codePoint, EncodingStatus &_status)
     } else if (_codePoint < 0x10000)
     {
         result.push_back(static_cast<uint8_t>((_codePoint >> 12) | 0xe0));              // 0xe0 = 1110 0000 add leading sequence (3 bytes)
-        result.push_back(static_cast<uint8_t>(((_codePoint >> 6) & 0x3f)) | 0x80);      // 0x80 = 1000 0000 add leading sequence 10 to the following bytes
+        result.push_back(static_cast<uint8_t>(((_codePoint >> 6) & 0x3f) | 0x80));      // 0x80 = 1000 0000 add leading sequence 10 to the following bytes
         result.push_back(static_cast<uint8_t>((_codePoint & 0x3f) | 0x80));             // 0x80 = 1000 0000 add leading sequence 10 to the following bytes
     } else
     {

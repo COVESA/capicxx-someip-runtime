@@ -30,14 +30,14 @@ class ClientId : public CommonAPI::ClientId{
     friend struct std::hash< ClientId >;
 
 public:
-	COMMONAPI_EXPORT ClientId(client_id_t client_id);
-	COMMONAPI_EXPORT virtual ~ClientId();
+    COMMONAPI_EXPORT ClientId(client_id_t client_id);
+    COMMONAPI_EXPORT virtual ~ClientId();
 
-	COMMONAPI_EXPORT bool operator==(CommonAPI::ClientId& clientIdToCompare);
-	COMMONAPI_EXPORT bool operator==(ClientId& clientIdToCompare);
-	COMMONAPI_EXPORT size_t hashCode();
+    COMMONAPI_EXPORT bool operator==(CommonAPI::ClientId& clientIdToCompare);
+    COMMONAPI_EXPORT bool operator==(ClientId& clientIdToCompare);
+    COMMONAPI_EXPORT size_t hashCode();
 
-	COMMONAPI_EXPORT client_id_t getClientId();
+    COMMONAPI_EXPORT client_id_t getClientId();
 
 protected:
     client_id_t client_id_;

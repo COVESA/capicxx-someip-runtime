@@ -35,7 +35,7 @@ void
 Factory::registerProxyCreateMethod(
     const std::string &_interface,
     ProxyCreateFunction _function) {
-    COMMONAPI_DEBUG("Registering function for creating \"", _interface, "\" proxy.");
+    COMMONAPI_INFO("Registering function for creating \"", _interface, "\" proxy.");
     proxyCreateFunctions_[_interface] = _function;
 }
 
@@ -43,7 +43,7 @@ void
 Factory::registerStubAdapterCreateMethod(
     const std::string &_interface,
     StubAdapterCreateFunction _function) {
-    COMMONAPI_DEBUG("Registering function for creating \"", _interface, "\" stub adapter.");
+    COMMONAPI_INFO("Registering function for creating \"", _interface, "\" stub adapter.");
     stubAdapterCreateFunctions_[_interface] = _function;
 }
 
@@ -51,6 +51,8 @@ std::shared_ptr<CommonAPI::Proxy>
 Factory::createProxy(
     const std::string &_domain, const std::string &_interface, const std::string &_instance,
     const ConnectionId_t &_connectionId) {
+
+    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":", _instance, "\"");
 
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
     if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
@@ -76,6 +78,8 @@ Factory::createProxy(
     const std::string &_domain, const std::string &_interface, const std::string &_instance,
     std::shared_ptr<MainLoopContext> _context) {
 
+    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":", _instance, "\"");
+
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
     if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
@@ -99,6 +103,8 @@ bool
 Factory::registerStub(
         const std::string &_domain, const std::string &_interface, const std::string &_instance,
         std::shared_ptr<StubBase> _stub, const ConnectionId_t &_connection) {
+
+    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":", _instance, "\"");
 
     auto stubAdapterCreateFunctionsIterator = stubAdapterCreateFunctions_.find(_interface);
     if (stubAdapterCreateFunctionsIterator != stubAdapterCreateFunctions_.end()) {
@@ -125,6 +131,8 @@ Factory::registerStub(
         const std::string &_domain, const std::string &_interface, const std::string &_instance,
         std::shared_ptr<StubBase> _stub, std::shared_ptr<MainLoopContext> _context) {
 
+    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":", _instance, "\"");
+
     auto stubAdapterCreateFunctionsIterator = stubAdapterCreateFunctions_.find(_interface);
     if (stubAdapterCreateFunctionsIterator != stubAdapterCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
@@ -150,7 +158,6 @@ Factory::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     if (AddressTranslator::get()->translate(someipAddress, address)) {
         std::lock_guard<std::mutex> itsLock(servicesMutex_);
         const auto &insertResult = services_.insert( { address.getAddress(), _adapter } );
-        const auto &insertIter = insertResult.first;
         const bool &isInsertSuccessful = insertResult.second;
 
         if (isInsertSuccessful) {
@@ -166,12 +173,13 @@ bool
 Factory::unregisterStub(const std::string &_domain,
                         const std::string &_interface,
                         const std::string &_instance) {
-    std::lock_guard<std::mutex> itsLock(servicesMutex_);
+    servicesMutex_.lock();
     CommonAPI::Address address(_domain, _interface, _instance);
 
     const auto &adapterResult = services_.find(address.getAddress());
 
     if (adapterResult == services_.end()) {
+        servicesMutex_.unlock();
         return false;
     }
 
@@ -181,9 +189,10 @@ Factory::unregisterStub(const std::string &_domain,
     stubManager->unregisterStubAdapter(adapter);
 
     if(!services_.erase(address.getAddress())) {
+        servicesMutex_.unlock();
         return false;
     }
-
+    servicesMutex_.unlock();
     return true;
 }
 

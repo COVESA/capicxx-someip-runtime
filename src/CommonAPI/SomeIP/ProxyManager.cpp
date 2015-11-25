@@ -62,8 +62,9 @@ void
 ProxyManager::getInstanceAvailabilityStatus(const std::string &_instanceAddress,
                                             CallStatus &_callStatus,
                                             AvailabilityStatus &_availabilityStatus) {
+    CommonAPI::Address itsAddress("local", interfaceId_, _instanceAddress);
     instanceAvailabilityStatusEvent_->getInstanceAvailabilityStatus(
-            _instanceAddress, &_availabilityStatus);
+            itsAddress.getAddress(), &_availabilityStatus);
     _callStatus = CommonAPI::CallStatus::SUCCESS;
 }
 
@@ -72,10 +73,11 @@ ProxyManager::getInstanceAvailabilityStatusAsync(
         const std::string &_instanceAddress,
         CommonAPI::ProxyManager::GetInstanceAvailabilityStatusCallback _callback) {
     std::thread t([this, _instanceAddress, _callback](){
+        CommonAPI::Address itsAddress("local", interfaceId_, _instanceAddress);
         std::vector<std::string> instances;
         CommonAPI::AvailabilityStatus availablityStatus;
         instanceAvailabilityStatusEvent_->getInstanceAvailabilityStatus(
-                _instanceAddress, &availablityStatus);
+                itsAddress.getAddress(), &availablityStatus);
         _callback(CommonAPI::CallStatus::SUCCESS, availablityStatus);
     });
     t.detach();

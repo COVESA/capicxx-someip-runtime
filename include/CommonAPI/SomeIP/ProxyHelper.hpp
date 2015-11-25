@@ -31,38 +31,38 @@ template <class, class>
 struct ProxyHelper;
 
 template <
-    template <class...> class _In, class... _InArgs,
-    template <class...> class _Out, class... _OutArgs>
-    struct ProxyHelper<_In<_InArgs...>, _Out<_OutArgs...>> {
+    template <class...> class In_, class... InArgs_,
+    template <class...> class Out_, class... OutArgs_>
+    struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
 
-		template <typename _Proxy = Proxy>
-		static void callMethod(
-			const _Proxy &_proxy,
-			const method_id_t _methodId,
-			const bool _reliable,
-			const _InArgs &... _inArgs,
-			CommonAPI::CallStatus &_callStatus) {
-			
-			static std::mutex callMethod_mutex_;
-			std::lock_guard<std::mutex> lock(callMethod_mutex_);
-			Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
-			callMethod(_proxy, methodCall, _inArgs..., _callStatus);
-		}
+        template <typename Proxy_ = Proxy>
+        static void callMethod(
+            const Proxy_ &_proxy,
+            const method_id_t _methodId,
+            const bool _reliable,
+            const InArgs_ &... _inArgs,
+            CommonAPI::CallStatus &_callStatus) {
+            
+            static std::mutex callMethod_mutex_;
+            std::lock_guard<std::mutex> lock(callMethod_mutex_);
+            Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
+            callMethod(_proxy, methodCall, _inArgs..., _callStatus);
+        }
 
-        template <typename _Proxy = Proxy>
-        static void callMethod(const _Proxy &_proxy,
+        template <typename Proxy_ = Proxy>
+        static void callMethod(const Proxy_ &_proxy,
                         const char *_methodName,
                         const char *_methodSignature,
-                        const _InArgs&... _inArgs,
+                        const InArgs_&... _inArgs,
                         CommonAPI::CallStatus &_callStatus) {
 
         if (_proxy.isAvailable()) {
 
             Message message = _proxy.createMethodCall(_methodName, _methodSignature);
 
-            if (sizeof...(_InArgs) > 0) {
+            if (sizeof...(InArgs_) > 0) {
                 OutputStream outputStream(message);
-                const bool success = SerializableArguments<_InArgs...>::serialize(outputStream, _inArgs...);
+                const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
                     _callStatus = CallStatus::OUT_OF_MEMORY;
                     return;
@@ -77,49 +77,49 @@ template <
         }
     }
 
-	template <typename _Proxy = Proxy>
-	static void callMethod(
-		const _Proxy &_proxy,
-		Message &_methodCall,
-		const _InArgs &... _inArgs,
-		CommonAPI::CallStatus &_callStatus) {
-		if (_proxy.isAvailable()) {
-			if (sizeof...(_InArgs) > 0) {
-				OutputStream outputStream(_methodCall);
-				const bool success = SerializableArguments<_InArgs...>::serialize(outputStream, _inArgs...);
-				if (!success) {
-					_callStatus = CallStatus::OUT_OF_MEMORY;
-					return;
-				}
-				outputStream.flush();
-			}
+    template <typename Proxy_ = Proxy>
+    static void callMethod(
+        const Proxy_ &_proxy,
+        Message &_methodCall,
+        const InArgs_ &... _inArgs,
+        CommonAPI::CallStatus &_callStatus) {
+        if (_proxy.isAvailable()) {
+            if (sizeof...(InArgs_) > 0) {
+                OutputStream outputStream(_methodCall);
+                const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
+                if (!success) {
+                    _callStatus = CallStatus::OUT_OF_MEMORY;
+                    return;
+                }
+                outputStream.flush();
+            }
 
-			bool success = _proxy.getConnection()->sendMessage(_methodCall);
+            bool success = _proxy.getConnection()->sendMessage(_methodCall);
 
-			if (!success) {
-				_callStatus = CallStatus::REMOTE_ERROR;
-				return;
-			}
+            if (!success) {
+                _callStatus = CallStatus::REMOTE_ERROR;
+                return;
+            }
 
-			_callStatus = CallStatus::SUCCESS;
-		}
-		else {
-			_callStatus = CallStatus::NOT_AVAILABLE;
-		}
-	}
+            _callStatus = CallStatus::SUCCESS;
+        }
+        else {
+            _callStatus = CallStatus::NOT_AVAILABLE;
+        }
+    }
 
-    template <typename _Proxy = Proxy>
+    template <typename Proxy_ = Proxy>
     static void callMethodWithReply(
-                    const _Proxy &_proxy,
+                    const Proxy_ &_proxy,
                     Message &_methodCall,
                     const CommonAPI::CallInfo *_info,
-                    const _InArgs &... _inArgs,
+                    const InArgs_ &... _inArgs,
                     CommonAPI::CallStatus &_callStatus,
-                    _OutArgs &... _outArgs) {
+                    OutArgs_ &... _outArgs) {
         if (_proxy.isAvailable()) {
-            if (sizeof...(_InArgs) > 0) {
+            if (sizeof...(InArgs_) > 0) {
                 OutputStream outputStream(_methodCall);
-                const bool success = SerializableArguments<_InArgs...>::serialize(outputStream, _inArgs...);
+                const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
                     _callStatus = CallStatus::OUT_OF_MEMORY;
                     return;
@@ -134,9 +134,9 @@ template <
                 return;
             }
 
-            if (sizeof...(_OutArgs) > 0) {
+            if (sizeof...(OutArgs_) > 0) {
                 InputStream inputStream(reply);
-                const bool success = SerializableArguments<_OutArgs...>::deserialize(inputStream, _outArgs...);
+                const bool success = SerializableArguments<OutArgs_...>::deserialize(inputStream, _outArgs...);
                 if (!success) {
                     _callStatus = CallStatus::REMOTE_ERROR;
                     return;
@@ -148,48 +148,48 @@ template <
         }
     }
 
-    template <typename _Proxy = Proxy>
+    template <typename Proxy_ = Proxy>
     static void callMethodWithReply(
-                    const _Proxy &_proxy,
+                    const Proxy_ &_proxy,
                     const method_id_t _methodId,
                     const bool _reliable,
                     const CommonAPI::CallInfo *_info,
-                    const _InArgs&... _inArgs,
+                    const InArgs_&... _inArgs,
                     CommonAPI::CallStatus &_callStatus,
-                    _OutArgs&... _outArgs) {
+                    OutArgs_&... _outArgs) {
         static std::mutex callMethodWithReply_mutex_;
         std::lock_guard<std::mutex> lock(callMethodWithReply_mutex_);
         Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
         callMethodWithReply(_proxy, methodCall, _info, _inArgs..., _callStatus, _outArgs...);
     }
 
-    template <typename _Proxy = Proxy, typename _AsyncCallback>
+    template <typename Proxy_ = Proxy, typename AsyncCallback_>
     static std::future<CallStatus> callMethodAsync(
-                    const _Proxy &_proxy,
+                    const Proxy_ &_proxy,
                     const method_id_t _methodId,
                     const bool _reliable,
                     const CommonAPI::CallInfo *_info,
-                    const _InArgs&... _inArgs,
-                    _AsyncCallback _asyncCallback,
-                    std::tuple<_OutArgs...> _outArgs) {
+                    const InArgs_&... _inArgs,
+                    AsyncCallback_ _asyncCallback,
+                    std::tuple<OutArgs_...> _outArgs) {
         static std::mutex callMethodAsync_mutex_;
         std::lock_guard<std::mutex> lock(callMethodAsync_mutex_);
         Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
         return callMethodAsync(_proxy, methodCall, _info, _inArgs..., _asyncCallback, _outArgs);
     }
 
-    template <typename _Proxy = Proxy, typename _AsyncCallback>
+    template <typename Proxy_ = Proxy, typename AsyncCallback_>
     static std::future<CallStatus> callMethodAsync(
-                    const _Proxy &_proxy,
+                    const Proxy_ &_proxy,
                     Message &_message,
                     const CommonAPI::CallInfo *_info,
-                    const _InArgs&... _inArgs,
-                    _AsyncCallback _asyncCallback,
-                    std::tuple<_OutArgs...> _outArgs) {
+                    const InArgs_&... _inArgs,
+                    AsyncCallback_ _asyncCallback,
+                    std::tuple<OutArgs_...> _outArgs) {
         if (_proxy.isAvailable()) {
-            if (sizeof...(_InArgs) > 0) {
+            if (sizeof...(InArgs_) > 0) {
                 OutputStream outputStream(_message);
-                const bool success = SerializableArguments< _InArgs... >::serialize(outputStream, _inArgs...);
+                const bool success = SerializableArguments< InArgs_... >::serialize(outputStream, _inArgs...);
                 if (!success) {
                     std::promise<CallStatus> promise;
                     promise.set_value(CallStatus::OUT_OF_MEMORY);
@@ -201,36 +201,36 @@ template <
             return _proxy.getConnection()->sendMessageWithReplyAsync(
                                                _message,
                                                ProxyAsyncCallbackHandler<
-                                                   _OutArgs...
+                                                   OutArgs_...
                                                >::create(std::move(_asyncCallback)),
                                                _info);
         } else {
             CallStatus callStatus = CallStatus::NOT_AVAILABLE;
             callCallbackForCallStatus(callStatus,
-            		_asyncCallback,
-					typename make_sequence<sizeof...(_OutArgs)>::type(),
-					_outArgs);
+                    _asyncCallback,
+                    typename make_sequence<sizeof...(OutArgs_)>::type(),
+                    _outArgs);
             std::promise< CallStatus > promise;
             promise.set_value(callStatus);
             return promise.get_future();
         }
     }
 
-    template <int... _ArgIndices>
+    template <int... ArgIndices_>
     static void callCallbackForCallStatus(CallStatus callStatus,
-    		std::function<void(CallStatus, _OutArgs...)> _callback,
-            index_sequence<_ArgIndices...>,
-            std::tuple<_OutArgs...> _argTuple) {
-
-        _callback(callStatus, std::move(std::get<_ArgIndices>(_argTuple))...);
+            std::function<void(CallStatus, OutArgs_...)> _callback,
+            index_sequence<ArgIndices_...>,
+            std::tuple<OutArgs_...> _argTuple) {
+        (void)_argTuple;
+        _callback(callStatus, std::move(std::get<ArgIndices_>(_argTuple))...);
     }
 
-    template <typename _AsyncCallback>
-	static void callCallbackForCallStatus(CallStatus callStatus,
-			_AsyncCallback _asyncCallback,
-			std::tuple<_OutArgs...> _outArgs) {
-		callCallbackForCallStatus(callStatus, _asyncCallback, typename make_sequence<sizeof...(_OutArgs)>::type(), _outArgs);
-	}
+    template <typename AsyncCallback_>
+    static void callCallbackForCallStatus(CallStatus callStatus,
+            AsyncCallback_ _asyncCallback,
+            std::tuple<OutArgs_...> _outArgs) {
+        callCallbackForCallStatus(callStatus, _asyncCallback, typename make_sequence<sizeof...(OutArgs_)>::type(), _outArgs);
+    }
 };
 
 } // namespace SomeIP

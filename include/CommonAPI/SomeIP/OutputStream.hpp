@@ -49,76 +49,76 @@ public:
      *
      * @param Message The #Message any data pushed into this stream should be written to.
      */
-	COMMONAPI_EXPORT OutputStream(Message message);
+    COMMONAPI_EXPORT OutputStream(Message message);
 
     /**
      * Destructor; does not call the destructor of the referred #Message. Make sure to maintain a reference to the
      * #Message outside of the stream if you intend to make further use of the message, e.g. in order to send it,
      * now that you have written some payload into it.
      */
-	COMMONAPI_EXPORT virtual ~OutputStream();
+    COMMONAPI_EXPORT virtual ~OutputStream();
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const bool &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const bool &_value, const EmptyDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const int8_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const int16_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const int32_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const int64_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const int8_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const int16_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const int32_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const int64_t &_value, const EmptyDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint8_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint16_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint32_t &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint64_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint8_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint16_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint32_t &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const uint64_t &_value, const EmptyDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const float &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const double &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const float &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const double &_value, const EmptyDeployment *_depl);
 
     COMMONAPI_EXPORT virtual OutputStream &writeValue(const std::string &_value, const EmptyDeployment *_depl);
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const std::string &_value, const StringDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const std::string &_value, const StringDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const ByteBuffer &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const ByteBuffer &_value, const EmptyDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &writeValue(const Version &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const Version &_value, const EmptyDeployment *_depl);
 
-	COMMONAPI_EXPORT virtual OutputStream &_writeValue(const uint32_t &_value, const uint8_t &_width);
-	COMMONAPI_EXPORT virtual OutputStream &_writeValueAt(const uint32_t &_value, const uint8_t &_width, const uint32_t &_position);
+    COMMONAPI_EXPORT virtual OutputStream &_writeValue(const uint32_t &_value, const uint8_t &_width);
+    COMMONAPI_EXPORT virtual OutputStream &_writeValueAt(const uint32_t &_value, const uint8_t &_width, const uint32_t &_position);
 
-	 template<typename _Base>
-	 COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<_Base> &_value, const EmptyDeployment *_depl) {
-	     writeValue(static_cast<_Base>(_value), nullptr);
-	     return (*this);
-	 }
+     template<typename Base_>
+     COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<Base_> &_value, const EmptyDeployment *) {
+         writeValue(static_cast<Base_>(_value), nullptr);
+         return (*this);
+     }
 
-	 template<class _Deployment, typename _Base>
-	 COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<_Base> &_value, const _Deployment *_depl) {
-	     if (_depl != nullptr) {
-	         switch (_depl->width_) {
-	         case 1:
-	         {
-	             uint8_t tmpValue1 = static_cast<uint8_t>(_value);
-	             writeValue(tmpValue1, nullptr);
-	         }
-	         break;
+     template<class Deployment_, typename Base_>
+     COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<Base_> &_value, const Deployment_ *_depl) {
+         if (_depl != nullptr) {
+             switch (_depl->width_) {
+             case 1:
+             {
+                 uint8_t tmpValue1 = static_cast<uint8_t>(_value);
+                 writeValue(tmpValue1, nullptr);
+             }
+             break;
 
-	         case 2:
-	         {
-	             uint16_t tmpValue2 = static_cast<uint16_t>(_value);
-	             writeValue(tmpValue2, nullptr);
-	         }
-	         break;
+             case 2:
+             {
+                 uint16_t tmpValue2 = static_cast<uint16_t>(_value);
+                 writeValue(tmpValue2, nullptr);
+             }
+             break;
 
-	         default:
-	             writeValue(static_cast<_Base>(_value), nullptr);
-	             break;
-	         }
-	     } else {
-	         writeValue(static_cast<_Base>(_value), nullptr);
-	     }
-	     return (*this);
+             default:
+                 writeValue(static_cast<Base_>(_value), nullptr);
+                 break;
+             }
+         } else {
+             writeValue(static_cast<Base_>(_value), nullptr);
+         }
+         return (*this);
     }
 
-    template<typename... _Types>
-    COMMONAPI_EXPORT OutputStream &writeValue(const Struct<_Types...> &_value,
+    template<typename... Types_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const Struct<Types_...> &_value,
                              const EmptyDeployment *_depl) {
         pushPosition();
         // Length field placeholder
@@ -127,22 +127,22 @@ public:
 
         if(!hasError()) {
             // Write struct content
-            const auto itsSize(std::tuple_size<std::tuple<_Types...>>::value);
-            StructWriter<itsSize-1, OutputStream, Struct<_Types...>, EmptyDeployment>{}((*this), _value, _depl);
+            const auto itsSize(std::tuple_size<std::tuple<Types_...>>::value);
+            StructWriter<itsSize-1, OutputStream, Struct<Types_...>, EmptyDeployment>{}((*this), _value, _depl);
         }
 
         // Write actual value of length field
         size_t length = getPosition() - popPosition();
         size_t position = popPosition();
-        _writeValueAt(length, 4, position);
+        _writeValueAt(uint32_t(length), 4, uint32_t(position));
 
         return (*this);
     }
 
-    template<typename _Deployment, typename... _Types>
-    COMMONAPI_EXPORT OutputStream &writeValue(const Struct<_Types...> &_value,
-                             const _Deployment *_depl) {
-    	uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 4);
+    template<typename Deployment_, typename... Types_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const Struct<Types_...> &_value,
+                             const Deployment_ *_depl) {
+        uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 4);
 
         if (structLengthWidth != 0) {
             pushPosition();
@@ -153,22 +153,22 @@ public:
 
         if(!hasError()) {
             // Write struct content
-            const auto itsSize(std::tuple_size<std::tuple<_Types...>>::value);
-            StructWriter<itsSize-1, OutputStream, Struct<_Types...>, _Deployment>{}((*this), _value, _depl);
+            const auto itsSize(std::tuple_size<std::tuple<Types_...>>::value);
+            StructWriter<itsSize-1, OutputStream, Struct<Types_...>, Deployment_>{}((*this), _value, _depl);
         }
 
         // Write actual value of length field
         if (structLengthWidth != 0) {
             size_t length = getPosition() - popPosition();
             size_t position = popPosition();
-            _writeValueAt(length, structLengthWidth, position);
+            _writeValueAt(uint32_t(length), structLengthWidth, uint32_t(position));
         }
 
         return (*this);
     }
 
-    template<class _PolymorphicStruct>
-	COMMONAPI_EXPORT OutputStream &writeValue(const std::shared_ptr<_PolymorphicStruct> &_value,
+    template<class PolymorphicStruct_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::shared_ptr<PolymorphicStruct_> &_value,
                              const EmptyDeployment *_depl = nullptr) {
         if (_value) {
             _writeValue(_value->getSerial());
@@ -179,12 +179,23 @@ public:
         return (*this);
     }
 
-    template<typename _Deployment, typename... _Types>
-	COMMONAPI_EXPORT OutputStream &writeValue(const Variant<_Types...> &_value,
-                             const _Deployment *_depl) {
-    	bool unionDefaultOrder = (_depl ? _depl->unionDefaultOrder_ : true);
-    	uint8_t unionLengthWidth = (_depl ? _depl->unionLengthWidth_ : 4);
-    	uint8_t unionTypeWidth = (_depl ? _depl->unionTypeWidth_ : 4);
+    template<class PolymorphicStruct_, typename Deployment_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::shared_ptr<PolymorphicStruct_> &_value,
+                             const Deployment_ *_depl = nullptr) {
+        if (_value) {
+            _writeValue(_value->getSerial());
+            if (!hasError()) {
+                _value->template writeValue<OutputStream>((*this), _depl);
+            }
+        }
+        return (*this);
+    }
+    template<typename Deployment_, typename... Types_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const Variant<Types_...> &_value,
+                             const Deployment_ *_depl) {
+        bool unionDefaultOrder = (_depl ? _depl->unionDefaultOrder_ : true);
+        uint8_t unionLengthWidth = (_depl ? _depl->unionLengthWidth_ : 4);
+        uint8_t unionTypeWidth = (_depl ? _depl->unionTypeWidth_ : 4);
 
         if (unionDefaultOrder) {
             pushPosition();
@@ -201,7 +212,7 @@ public:
         if (!hasError()) {
             OutputStreamWriteVisitor<OutputStream> valueVisitor(*this);
             ApplyStreamVisitor<OutputStreamWriteVisitor<OutputStream>,
-                 Variant<_Types...>, _Deployment, _Types...>::visit(valueVisitor, _value, _depl);
+                 Variant<Types_...>, Deployment_, Types_...>::visit(valueVisitor, _value, _depl);
         }
 
         size_t length = getPosition() - popPosition();
@@ -209,7 +220,7 @@ public:
 
         // Write actual value of length field
         if (unionLengthWidth != 0) {
-            _writeValueAt(length, unionLengthWidth, position);
+            _writeValueAt(uint32_t(length), unionLengthWidth, uint32_t(position));
         } else {
             size_t paddingCount = _depl->unionMaxLength_ - length;
             if (paddingCount < 0) {
@@ -224,12 +235,12 @@ public:
         return (*this);
     }
 
-    template<typename _ElementType, typename _ElementDepl>
-	COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<_ElementType> &_value,
-                             const ArrayDeployment<_ElementDepl> *_depl) {
-    	uint8_t arrayLengthWidth = (_depl ? _depl->arrayLengthWidth_ : 4);
-    	uint32_t arrayMinLength = (_depl ? _depl->arrayMinLength_ : 0);
-    	uint32_t arrayMaxLength = (_depl ? _depl->arrayMaxLength_ : 0xFFFFFFFF);
+    template<typename ElementType_, typename ElementDepl_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<ElementType_> &_value,
+                             const ArrayDeployment<ElementDepl_> *_depl) {
+        uint8_t arrayLengthWidth = (_depl ? _depl->arrayLengthWidth_ : 4);
+        uint32_t arrayMinLength = (_depl ? _depl->arrayMinLength_ : 0);
+        uint32_t arrayMaxLength = (_depl ? _depl->arrayMaxLength_ : 0xFFFFFFFF);
 
         if (arrayLengthWidth != 0) {
             pushPosition();
@@ -263,14 +274,14 @@ public:
         if (arrayLengthWidth != 0) {
             size_t length = getPosition() - popPosition();
             size_t position2Write = popPosition();
-            _writeValueAt(length, arrayLengthWidth, position2Write);
+            _writeValueAt(uint32_t(length), arrayLengthWidth, uint32_t(position2Write));
         }
 
         return (*this);
     }
 
-    template<typename _KeyType, typename _ValueType, typename _HasherType>
-    COMMONAPI_EXPORT OutputStream &writeValue(const std::unordered_map<_KeyType, _ValueType, _HasherType> &_value,
+    template<typename KeyType_, typename ValueType_, typename HasherType_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::unordered_map<KeyType_, ValueType_, HasherType_> &_value,
                              const EmptyDeployment *_depl) {
         pushPosition();
         _writeValue(static_cast<uint32_t>(0)); // Placeholder
@@ -295,9 +306,9 @@ public:
         return (*this);
     }
 
-    template<typename _Deployment, typename _KeyType, typename _ValueType, typename _HasherType>
-	COMMONAPI_EXPORT OutputStream &writeValue(const std::unordered_map<_KeyType, _ValueType, _HasherType> &_value,
-                             const _Deployment *_depl) {
+    template<typename Deployment_, typename KeyType_, typename ValueType_, typename HasherType_>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::unordered_map<KeyType_, ValueType_, HasherType_> &_value,
+                             const Deployment_ *_depl) {
         pushPosition();
         _writeValue(static_cast<uint32_t>(0)); // Placeholder
         pushPosition(); // Start of map data
@@ -315,20 +326,20 @@ public:
         }
 
         // Write number of written bytes to placeholder position
-        uint32_t length = getPosition() - popPosition();
+        uint32_t length = uint32_t(getPosition() - popPosition());
         _writeValueAt(length, popPosition());
 
         return (*this);
     }
 
-	COMMONAPI_EXPORT virtual bool hasError() const;
+    COMMONAPI_EXPORT virtual bool hasError() const;
 
     /**
      * Writes the data that was buffered within this #OutputMessageStream to the #Message that was given to the constructor. Each call to flush()
      * will completely override the data that currently is contained in the #Message. The data that is buffered in this #OutputMessageStream is
      * not deleted by calling flush().
      */
-	COMMONAPI_EXPORT void flush();
+    COMMONAPI_EXPORT void flush();
 
     /**
      * Reserves the given number of bytes for writing, thereby negating the need to dynamically allocate memory while writing.
@@ -336,51 +347,50 @@ public:
      *
      * @param numOfBytes The number of bytes that should be reserved for writing.
      */
-	COMMONAPI_EXPORT void reserveMemory(size_t numOfBytes);
+    COMMONAPI_EXPORT void reserveMemory(size_t numOfBytes);
 
-    template<typename _Type>
-	COMMONAPI_EXPORT OutputStream &_writeValue(const _Type &_value) {
+    template<typename Type_>
+    COMMONAPI_EXPORT OutputStream &_writeValue(const Type_ &_value) {
         union {
-            _Type typed;
-            byte_t raw[sizeof(_Type)];
+            Type_ typed;
+            byte_t raw[sizeof(Type_)];
         } value;
         value.typed = _value;
     #if __BYTE_ORDER == __LITTLE_ENDIAN
-        byte_t reordered[sizeof(_Type)];
-        byte_t *source = &value.raw[sizeof(_Type)-1];
-        byte_t *target = reordered;
-        for (size_t i = 0; i < sizeof(_Type); ++i) {
-            *target++ = *source--;
+        byte_t *source = &value.raw[sizeof(Type_)-1];
+        for (size_t i = 0; i < sizeof(Type_); ++i) {
+            _writeRaw(*source--);
         }
-        _writeRaw(reordered, sizeof(_Type));
     #else
-        _writeRaw(value.raw, sizeof(_Type));
+        for (size_t i = 0; i < sizeof(Type_); ++i) {
+            _writeRaw(value.raw[i]);
+        }
     #endif
         return (*this);
     }
 
-    template<typename _Type>
-	COMMONAPI_EXPORT void _writeValueAt(const _Type &_value, size_t _position) {
-        assert(_position + sizeof(_Type) <= payload_.size());
+    template<typename Type_>
+    COMMONAPI_EXPORT void _writeValueAt(const Type_ &_value, size_t _position) {
+        assert(_position + sizeof(Type_) <= payload_.size());
         union {
-            _Type typed;
-            byte_t raw[sizeof(_Type)];
+            Type_ typed;
+            byte_t raw[sizeof(Type_)];
         } value;
         value.typed = _value;
     #if __BYTE_ORDER == __LITTLE_ENDIAN
-        byte_t reordered[sizeof(_Type)];
-        byte_t *source = &value.raw[sizeof(_Type)-1];
+        byte_t reordered[sizeof(Type_)];
+        byte_t *source = &value.raw[sizeof(Type_)-1];
         byte_t *target = reordered;
-        for (size_t i = 0; i < sizeof(_Type); ++i) {
+        for (size_t i = 0; i < sizeof(Type_); ++i) {
             *target++ = *source--;
         }
-        _writeRawAt(reordered, sizeof(_Type), _position);
+        _writeRawAt(reordered, sizeof(Type_), _position);
     #else
-        _writeRawAt(value.raw, sizeof(_Type), _position);
+        _writeRawAt(value.raw, sizeof(Type_), _position);
     #endif
     }
 
-	COMMONAPI_EXPORT OutputStream &_writeString(const std::string &_value, const StringDeployment *_depl);
+    COMMONAPI_EXPORT OutputStream &_writeString(const std::string &_value, const StringDeployment *_depl);
 
     /**
      * Fills the stream with 0-bytes to make the next value be aligned to the boundary given.
@@ -389,7 +399,7 @@ public:
      *
      * @param _boundary The byte-boundary to which the next value should be aligned.
      */
-	COMMONAPI_EXPORT void align(const size_t _boundary);
+    COMMONAPI_EXPORT void align(const size_t _boundary);
 
     /**
      * Takes sizeInByte characters, starting from the character which val points to, and stores them for later writing.
@@ -412,8 +422,9 @@ public:
      * @see OutputMessageStream()
      * @see flush()
      */
-	COMMONAPI_EXPORT void _writeRaw(const byte_t *_data, const size_t _size);
-	COMMONAPI_EXPORT void _writeRawAt(const byte_t *_data, const size_t _size, const size_t _position);
+    COMMONAPI_EXPORT void _writeRaw(const byte_t &_data);
+    COMMONAPI_EXPORT void _writeRaw(const byte_t *_data, const size_t _size);
+    COMMONAPI_EXPORT void _writeRawAt(const byte_t *_data, const size_t _size, const size_t _position);
 
     inline void _printPayload() {
         for (auto b : payload_) {
@@ -426,9 +437,9 @@ protected:
     std::vector<byte_t> payload_;
 
 private:
-	COMMONAPI_EXPORT size_t getPosition();
-	COMMONAPI_EXPORT void pushPosition();
-	COMMONAPI_EXPORT size_t popPosition();
+    COMMONAPI_EXPORT size_t getPosition();
+    COMMONAPI_EXPORT void pushPosition();
+    COMMONAPI_EXPORT size_t popPosition();
 
     Message message_;
     bool errorOccurred_;

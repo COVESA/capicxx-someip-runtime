@@ -46,40 +46,40 @@ typedef std::shared_ptr<StubAdapter>
 
 class Factory : public CommonAPI::Factory {
 public:
-	COMMONAPI_EXPORT static std::shared_ptr<Factory> get();
+    COMMONAPI_EXPORT static std::shared_ptr<Factory> get();
 
-	COMMONAPI_EXPORT Factory();
-	COMMONAPI_EXPORT virtual ~Factory();
+    COMMONAPI_EXPORT Factory();
+    COMMONAPI_EXPORT virtual ~Factory();
 
-	COMMONAPI_EXPORT void registerProxyCreateMethod(const std::string &_interface,
-    							   ProxyCreateFunction _function);
+    COMMONAPI_EXPORT void registerProxyCreateMethod(const std::string &_interface,
+                                   ProxyCreateFunction _function);
 
-	COMMONAPI_EXPORT void registerStubAdapterCreateMethod(const std::string &_interface,
-    		                             StubAdapterCreateFunction _function);
+    COMMONAPI_EXPORT void registerStubAdapterCreateMethod(const std::string &_interface,
+                                         StubAdapterCreateFunction _function);
 
-	COMMONAPI_EXPORT std::shared_ptr<CommonAPI::Proxy> createProxy(const std::string &_domain,
+    COMMONAPI_EXPORT std::shared_ptr<CommonAPI::Proxy> createProxy(const std::string &_domain,
                                                   const std::string &_interface,
                                                   const std::string &_instance,
                                                   const ConnectionId_t &_connectionId);
-	COMMONAPI_EXPORT std::shared_ptr<CommonAPI::Proxy> createProxy(const std::string &_domain,
+    COMMONAPI_EXPORT std::shared_ptr<CommonAPI::Proxy> createProxy(const std::string &_domain,
                                                   const std::string &_interface,
                                                   const std::string &_instance,
                                                   std::shared_ptr<MainLoopContext> _context);
 
-	COMMONAPI_EXPORT bool registerStub(const std::string &_domain,
-    				  const std::string &_interface,
-    				  const std::string &_instance,
-    				  std::shared_ptr<CommonAPI::StubBase> _stub,
-    				  const ConnectionId_t &_connectionId);
-	COMMONAPI_EXPORT bool registerStub(const std::string &_domain,
-    				  const std::string &_interface,
-    				  const std::string &_instance,
-    				  std::shared_ptr<CommonAPI::StubBase> _stub,
-    				  std::shared_ptr<CommonAPI::MainLoopContext> _context);
+    COMMONAPI_EXPORT bool registerStub(const std::string &_domain,
+                      const std::string &_interface,
+                      const std::string &_instance,
+                      std::shared_ptr<CommonAPI::StubBase> _stub,
+                      const ConnectionId_t &_connectionId);
+    COMMONAPI_EXPORT bool registerStub(const std::string &_domain,
+                      const std::string &_interface,
+                      const std::string &_instance,
+                      std::shared_ptr<CommonAPI::StubBase> _stub,
+                      std::shared_ptr<CommonAPI::MainLoopContext> _context);
 
-	COMMONAPI_EXPORT bool unregisterStub(const std::string &_domain,
-    					const std::string &_interface,
-    					const std::string &_instance);
+    COMMONAPI_EXPORT bool unregisterStub(const std::string &_domain,
+                        const std::string &_interface,
+                        const std::string &_instance);
 
     // Services
     COMMONAPI_EXPORT bool isRegisteredService(const std::string &_address);
@@ -93,9 +93,9 @@ public:
     COMMONAPI_EXPORT bool unregisterManagedService(const std::string &_address);
 
 private:
-	COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(const ConnectionId_t &);
-	COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(std::shared_ptr<MainLoopContext>);
-	COMMONAPI_EXPORT bool registerStubAdapter(std::shared_ptr<StubAdapter>);
+    COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(const ConnectionId_t &);
+    COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(std::shared_ptr<MainLoopContext>);
+    COMMONAPI_EXPORT bool registerStubAdapter(std::shared_ptr<StubAdapter>);
 
 private:
     std::map<ConnectionId_t, std::shared_ptr<Connection>> connections_;

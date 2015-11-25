@@ -22,10 +22,10 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-template < typename ... _ArgTypes >
+template < typename ... ArgTypes_ >
 class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandler {
  public:
-    typedef std::function< void(CallStatus, _ArgTypes...) > FunctionType;
+    typedef std::function< void(CallStatus, ArgTypes_...) > FunctionType;
 
     static std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > create(FunctionType &&callback) {
         return std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler >(
@@ -42,19 +42,21 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
     }
 
     virtual void onMessageReply(const CallStatus &callStatus, const Message &message) {
-        promise_.set_value(handleMessageReply(callStatus, message, typename make_sequence< sizeof...(_ArgTypes) >::type()));
+        promise_.set_value(handleMessageReply(callStatus, message, typename make_sequence< sizeof...(ArgTypes_) >::type()));
     }
 
  private:
-    template < int... _ArgIndices >
-    inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< _ArgIndices... >) const {
+    template < int... ArgIndices_ >
+    inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< ArgIndices_... >) const {
         CallStatus callStatus = _callStatus;
-        std::tuple< _ArgTypes... > argTuple;
+        std::tuple< ArgTypes_... > argTuple;
+
+        (void)argTuple;
 
         if (callStatus == CallStatus::SUCCESS) {
             if (!message.isErrorType()) {
                 InputStream inputStream(message);
-                const bool success = SerializableArguments< _ArgTypes... >::deserialize(inputStream, std::get< _ArgIndices >(argTuple)...);
+                const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple)...);
                 if (!success) {
                     callStatus = CallStatus::REMOTE_ERROR;
                 }
@@ -63,7 +65,7 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
             }
         }
 
-        callback_(callStatus, std::move(std::get< _ArgIndices >(argTuple))...);
+        callback_(callStatus, std::move(std::get< ArgIndices_ >(argTuple))...);
         return callStatus;
     }
 

@@ -17,21 +17,21 @@ template <int ...>
 struct index_sequence {};
 
 
-template <int N, int ...S>
-struct make_sequence : make_sequence<N-1, N-1, S...> {};
+template <int N_, int ...S_>
+struct make_sequence : make_sequence<N_-1, N_-1, S_...> {};
 
-template <int ...S>
-struct make_sequence<0, S...> {
-    typedef index_sequence<S...> type;
+template <int ...S_>
+struct make_sequence<0, S_...> {
+    typedef index_sequence<S_...> type;
 };
 
 
-template <int N, int _Offset, int ...S>
-struct make_sequence_range : make_sequence_range<N-1, _Offset, N-1+_Offset, S...> {};
+template <int N_, int Offset_, int ...S_>
+struct make_sequence_range : make_sequence_range<N_-1, Offset_, N_-1+Offset_, S_...> {};
 
-template <int _Offset, int ...S>
-struct make_sequence_range<0, _Offset, S...> {
-    typedef index_sequence<S...> type;
+template <int Offset_, int ...S_>
+struct make_sequence_range<0, Offset_, S_...> {
+    typedef index_sequence<S_...> type;
 };
 
 } // namespace SomeIP

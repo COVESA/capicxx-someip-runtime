@@ -61,7 +61,7 @@ public:
 
     void addEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler);
+            ProxyConnection::EventHandler* eventHandler, major_version_t major);
 
     void removeEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
@@ -87,6 +87,16 @@ public:
     virtual void requestService(const Address &_address, bool _hasSelective =
             false);
 
+    virtual void registerEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField);
+    virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event);
+
+    virtual void requestEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField);
+    virtual void releaseEvent(service_id_t _service, instance_id_t _instance,
+            event_id_t _event);
+
     virtual const std::shared_ptr<StubManager> getStubManager();
     virtual void setStubMessageHandler(MessageHandler_t stubMessageHandler);
     virtual bool isStubMessageHandlerSet();
@@ -96,18 +106,26 @@ public:
     virtual const ConnectionId_t& getConnectionId();
 
     virtual void sendPendingSubscriptions(service_id_t serviceId,
-            instance_id_t instanceId) const;
+            instance_id_t instanceId);
+
+    virtual void getInitialEvent(service_id_t _service, instance_id_t _instance,
+            Message _message, EventHandler *_eventHandler,
+            uint32_t tag);
 
 private:
     void proxyReceive(const std::shared_ptr<vsomeip::message> &_message);
     void handleProxyReceive(const std::shared_ptr<vsomeip::message> &_message);
     void stubReceive(const std::shared_ptr<vsomeip::message> &_message);
     void handleStubReceive(const std::shared_ptr<vsomeip::message> &_message);
-    void onConnectionEvent(event_type_e _event);
+    void onConnectionEvent(state_type_e _state);
     void onAvailabilityChange(service_id_t _service, instance_id_t _instance,
             bool _is_available);
     void dispatch();
     void cleanup();
+
+    void eventInitialValueCallback(const CallStatus callStatus,
+                const Message& message, EventHandler *_eventHandler,
+                const uint32_t tag);
 
     std::thread* dispatchThread_;
 
@@ -118,7 +136,7 @@ private:
 
     ConnectionStatusEvent connectionStatusEvent_;
 
-    event_type_e connectionStatus_;
+    state_type_e connectionStatus_;
     mutable std::mutex connectionMutex_;
     mutable std::condition_variable connectionCondition_;
 
@@ -162,6 +180,10 @@ private:
     typedef std::map<service_id_t,
             std::map<instance_id_t, std::set<eventgroup_id_t> > > subscriptions_map_t;
     subscriptions_map_t subscriptions_;
+
+    typedef std::tuple<Message, ProxyConnection::EventHandler*, uint32_t> inital_event_tuple_t;
+    std::map<service_id_t,
+                std::map<instance_id_t, std::vector<inital_event_tuple_t> > > inital_event_requests;
 };
 
 } // namespace SomeIP

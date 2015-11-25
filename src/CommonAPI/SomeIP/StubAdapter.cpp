@@ -12,7 +12,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 StubAdapter::StubAdapter(const Address &_someipAddress,
-                		 const std::shared_ptr<ProxyConnection> &_connection)
+                         const std::shared_ptr<ProxyConnection> &_connection)
     : someipAddress_(_someipAddress), connection_(_connection) {
 }
 
@@ -21,7 +21,7 @@ StubAdapter::~StubAdapter() {
 }
 
 void
-StubAdapter::init(std::shared_ptr< StubAdapter > instance) {
+StubAdapter::init(std::shared_ptr< StubAdapter >) {
 }
 
 void
@@ -30,10 +30,10 @@ StubAdapter::deinit() {
 
 const Address &
 StubAdapter::getSomeIpAddress() const {
-	return someipAddress_;
+    return someipAddress_;
 }
 
-const bool
+bool
 StubAdapter::isManagingInterface() {
     return false;
 }
@@ -44,9 +44,25 @@ StubAdapter::getConnection() const {
 }
 
 bool
-StubAdapter::onInterfaceMessage(const Message &message) {
+StubAdapter::onInterfaceMessage(const Message &) {
     return true;
 }
+
+void
+StubAdapter::registerEvent(event_id_t _event, eventgroup_id_t _eventGroup,
+        bool _isField) {
+    connection_->registerEvent(
+            someipAddress_.getService(), someipAddress_.getInstance(),
+            _event, _eventGroup, _isField);
+}
+
+void
+StubAdapter::unregisterEvent(event_id_t _event) {
+    connection_->unregisterEvent(
+            someipAddress_.getService(), someipAddress_.getInstance(),
+            _event);
+}
+
 
 } // namespace SomeIP
 } // namespace CommonAPI

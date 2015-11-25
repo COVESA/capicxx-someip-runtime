@@ -27,8 +27,12 @@ void ProxyBase::addEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        ProxyConnection::EventHandler* eventHandler) {
-    connection_->addEventHandler(serviceId, instanceId, eventGroupId, eventId, eventHandler);
+        bool isField,
+        ProxyConnection::EventHandler* eventHandler,
+        major_version_t major) {
+    connection_->addEventHandler(serviceId, instanceId, eventGroupId, eventId,
+            eventHandler, major);
+    connection_->requestEvent(serviceId, instanceId, eventId, eventGroupId, isField);
 }
 
 void ProxyBase::removeEventHandler(
@@ -37,7 +41,14 @@ void ProxyBase::removeEventHandler(
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
         ProxyConnection::EventHandler* eventHandler) {
+    connection_->releaseEvent(serviceId, instanceId, eventId);
     connection_->removeEventHandler(serviceId, instanceId, eventGroupId, eventId, eventHandler);
+}
+
+void ProxyBase::getInitialEvent(service_id_t _service, instance_id_t _instance,
+        Message _message, ProxyConnection::EventHandler *_eventHandler,
+        uint32_t _tag) {
+    connection_->getInitialEvent(_service, _instance, _message, _eventHandler, _tag);
 }
 
 } // namespace SomeIP

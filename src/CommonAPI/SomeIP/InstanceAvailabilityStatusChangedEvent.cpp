@@ -25,8 +25,7 @@ InstanceAvailabilityStatusChangedEvent::InstanceAvailabilityStatusChangedEvent(
 InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent() {}
 
 void
-InstanceAvailabilityStatusChangedEvent::onEventMessage(const Message& _message) {
-    //TODO find out if this is necessary for SomeIP
+InstanceAvailabilityStatusChangedEvent::onEventMessage(const Message &) {
 }
 
 void
@@ -39,13 +38,15 @@ InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus(
     AddressTranslator::get()->translate(service, capiAddressNewService);
     if(capiAddressNewService.getInterface() == observedInterfaceName_) {
         if(_isAvailable) {
-            addInstance(capiAddressNewService, _instanceId);
-            notifyListeners(capiAddressNewService.getAddress(),
-                    CommonAPI::AvailabilityStatus::AVAILABLE);
+            if (addInstance(capiAddressNewService, _instanceId)) {
+                notifyListeners(capiAddressNewService.getAddress(),
+                        CommonAPI::AvailabilityStatus::AVAILABLE);
+            }
         } else {
-            removeInstance(capiAddressNewService, _instanceId);
-            notifyListeners(capiAddressNewService.getAddress(),
-                    CommonAPI::AvailabilityStatus::NOT_AVAILABLE);
+            if (removeInstance(capiAddressNewService, _instanceId)) {
+                notifyListeners(capiAddressNewService.getAddress(),
+                        CommonAPI::AvailabilityStatus::NOT_AVAILABLE);
+            }
         }
     } else {
         COMMONAPI_ERROR(
@@ -69,7 +70,7 @@ InstanceAvailabilityStatusChangedEvent::getInstanceAvailabilityStatus(
         CommonAPI::AvailabilityStatus *_availablityStatus) {
     std::lock_guard<std::mutex> lock(instancesMutex_);
     CommonAPI::Address capiAddress(_instanceAddress);
-    auto instance = instancesBackward_.find(capiAddress.getAddress());
+    auto instance = instancesBackward_.find(capiAddress.getInstance());
     if(instance != instancesBackward_.end())
         *_availablityStatus = CommonAPI::AvailabilityStatus::AVAILABLE;
     else
@@ -78,7 +79,7 @@ InstanceAvailabilityStatusChangedEvent::getInstanceAvailabilityStatus(
 
 void
 InstanceAvailabilityStatusChangedEvent::onFirstListenerAdded(
-        const Listener& listener) {
+        const Listener &) {
     std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
             std::bind(
                     &InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus,
@@ -91,28 +92,36 @@ InstanceAvailabilityStatusChangedEvent::onFirstListenerAdded(
 
 void
 InstanceAvailabilityStatusChangedEvent::onLastListenerRemoved(
-        const Listener& listener) {
+        const Listener &) {
     Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE);
     proxyConnection_->unregisterAvailabilityHandler(
             wildcardAddress, availabilityHandlerId_);
 }
 
-void
+bool
 InstanceAvailabilityStatusChangedEvent::addInstance(
         const CommonAPI::Address &_address,
         const instance_id_t &_instanceId) {
     std::lock_guard<std::mutex> lock(instancesMutex_);
-    instancesForward_[_instanceId] = _address.getAddress();
-    instancesBackward_[_address.getAddress()] = _instanceId;
+    if (instancesForward_.find(_instanceId) == instancesForward_.end()) {
+        instancesForward_[_instanceId] = _address.getInstance();
+        instancesBackward_[_address.getInstance()] = _instanceId;
+        return true;
+    }
+    return false;
 }
 
-void
+bool
 InstanceAvailabilityStatusChangedEvent::removeInstance(
         const CommonAPI::Address &_address,
         const instance_id_t &_instanceId) {
     std::lock_guard<std::mutex> lock(instancesMutex_);
-    instancesForward_.erase(_instanceId);
-    instancesBackward_.erase(_address.getAddress());
+    if(instancesForward_.find(_instanceId) != instancesForward_.end()) {
+        instancesForward_.erase(_instanceId);
+        instancesBackward_.erase(_address.getInstance());
+        return true;
+    }
+    return false;
 }
 
 

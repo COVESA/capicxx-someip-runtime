@@ -11,6 +11,8 @@
 
 #include <vsomeip/vsomeip.hpp>
 
+#include <CommonAPI/CallInfo.hpp>
+#include <CommonAPI/Types.hpp>
 #include <CommonAPI/SomeIP/Types.hpp>
 
 namespace CommonAPI {

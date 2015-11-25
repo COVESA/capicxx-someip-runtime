@@ -12,6 +12,7 @@
 
 #include <memory>
 #include "CommonAPI/MainLoopContext.hpp"
+#include <mutex>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -29,6 +30,8 @@ class DispatchSource: public CommonAPI::DispatchSource {
 
  private:
     std::shared_ptr<Watch> watch_;
+
+    std::mutex watchMutex_;
 };
 
 } // namespace SomeIP

@@ -21,17 +21,17 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-template <typename _AttributeType, typename _AttributeDepl = EmptyDeployment>
-class ReadonlyAttribute: public _AttributeType {
+template <typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
+class ReadonlyAttribute: public AttributeType_ {
 public:
-    typedef typename _AttributeType::ValueType ValueType;
-    typedef _AttributeDepl ValueTypeDepl;
-    typedef typename _AttributeType::AttributeAsyncCallback AttributeAsyncCallback;
+    typedef typename AttributeType_::ValueType ValueType;
+    typedef AttributeDepl_ ValueTypeDepl;
+    typedef typename AttributeType_::AttributeAsyncCallback AttributeAsyncCallback;
 
     ReadonlyAttribute(Proxy &_proxy,
                       const method_id_t _getMethodId,
                       const bool _getReliable,
-                      _AttributeDepl *_depl = nullptr)
+                      AttributeDepl_ *_depl = nullptr)
         : proxy_(_proxy),
           getMethodId_(_getMethodId),
           getReliable_(_getReliable),
@@ -41,55 +41,55 @@ public:
     void getValue(CallStatus &_status, ValueType &_value, const CommonAPI::CallInfo *_info) const {
 
         if (getMethodId_ != 0) {
-			CommonAPI::Deployable<ValueType, _AttributeDepl> deployedValue(depl_);
-			ProxyHelper<
-				SerializableArguments<>,
-				SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>
-			>::callMethodWithReply(
-					proxy_,
-					getMethodId_,
-					getReliable_,
-					(_info ? _info : &defaultCallInfo),
-					_status,
-					deployedValue);
-			_value = deployedValue.getValue();
+            CommonAPI::Deployable<ValueType, AttributeDepl_> deployedValue(depl_);
+            ProxyHelper<
+                SerializableArguments<>,
+                SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
+            >::callMethodWithReply(
+                    proxy_,
+                    getMethodId_,
+                    getReliable_,
+                    (_info ? _info : &defaultCallInfo),
+                    _status,
+                    deployedValue);
+            _value = deployedValue.getValue();
         } else {
-        	_status = CommonAPI::CallStatus::NOT_AVAILABLE;
+            _status = CommonAPI::CallStatus::NOT_AVAILABLE;
         }
     }
 
     std::future<CallStatus> getValueAsync(AttributeAsyncCallback _callback, const CommonAPI::CallInfo *_info) {
-        CommonAPI::Deployable<ValueType, _AttributeDepl> deployedValue(depl_);
+        CommonAPI::Deployable<ValueType, AttributeDepl_> deployedValue(depl_);
 
         if (getMethodId_ != 0) {
-			return ProxyHelper<
-						SerializableArguments<>,
-						SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>
-				>::callMethodAsync(
-					proxy_,
-					getMethodId_,
-					getReliable_,
-					(_info ? _info : &defaultCallInfo),
-					[_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, _AttributeDepl> _response) {
-						_callback(_status, _response.getValue());
-					},
-					std::make_tuple(deployedValue));
+            return ProxyHelper<
+                        SerializableArguments<>,
+                        SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
+                >::callMethodAsync(
+                    proxy_,
+                    getMethodId_,
+                    getReliable_,
+                    (_info ? _info : &defaultCallInfo),
+                    [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, AttributeDepl_> _response) {
+                        _callback(_status, _response.getValue());
+                    },
+                    std::make_tuple(deployedValue));
         } else {
-        	CommonAPI::CallStatus callStatus = CommonAPI::CallStatus::NOT_AVAILABLE;
+            CommonAPI::CallStatus callStatus = CommonAPI::CallStatus::NOT_AVAILABLE;
 
-        	ProxyHelper<
-				SerializableArguments<>,
-				SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>
-				>::callCallbackForCallStatus(
-					callStatus,
-					[_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, _AttributeDepl> _response) {
-						_callback(_status, _response.getValue());
-					},
-					std::make_tuple(deployedValue));
+            ProxyHelper<
+                SerializableArguments<>,
+                SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
+                >::callCallbackForCallStatus(
+                    callStatus,
+                    [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, AttributeDepl_> _response) {
+                        _callback(_status, _response.getValue());
+                    },
+                    std::make_tuple(deployedValue));
 
-        	std::promise<CommonAPI::CallStatus> promise;
-			promise.set_value(callStatus);
-			return promise.get_future();
+            std::promise<CommonAPI::CallStatus> promise;
+            promise.set_value(callStatus);
+            return promise.get_future();
         }
     }
 
@@ -97,22 +97,22 @@ protected:
     Proxy &proxy_;
     const method_id_t getMethodId_;
     const bool getReliable_;
-    _AttributeDepl *depl_;
+    AttributeDepl_ *depl_;
 };
 
-template <typename _AttributeType, typename _AttributeDepl = EmptyDeployment>
-class Attribute: public ReadonlyAttribute<_AttributeType, _AttributeDepl> {
+template <typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
+class Attribute: public ReadonlyAttribute<AttributeType_, AttributeDepl_> {
 public:
-    typedef typename _AttributeType::ValueType ValueType;
-    typedef typename _AttributeType::AttributeAsyncCallback AttributeAsyncCallback;
+    typedef typename AttributeType_::ValueType ValueType;
+    typedef typename AttributeType_::AttributeAsyncCallback AttributeAsyncCallback;
 
     Attribute(Proxy &_proxy,
               const method_id_t _getMethodId,
               const bool _getReliable,
               const method_id_t _setMethodId,
               const bool _setReliable,
-              _AttributeDepl *_depl = nullptr)
-        : ReadonlyAttribute< _AttributeType, _AttributeDepl>(_proxy, _getMethodId, _getReliable, _depl),
+              AttributeDepl_ *_depl = nullptr)
+        : ReadonlyAttribute< AttributeType_, AttributeDepl_>(_proxy, _getMethodId, _getReliable, _depl),
           setMethodId_(_setMethodId),
           setReliable_(_setReliable) {
     }
@@ -120,17 +120,17 @@ public:
     void setValue(const ValueType &_request,
                   CallStatus &_status,
                   ValueType &_response,
-				  const CommonAPI::CallInfo *_info) {
-        CommonAPI::Deployable<ValueType, _AttributeDepl> deployedRequest(_request, this->depl_);
-        CommonAPI::Deployable<ValueType, _AttributeDepl> deployedResponse(this->depl_);
+                  const CommonAPI::CallInfo *_info) {
+        CommonAPI::Deployable<ValueType, AttributeDepl_> deployedRequest(_request, this->depl_);
+        CommonAPI::Deployable<ValueType, AttributeDepl_> deployedResponse(this->depl_);
         ProxyHelper<
-            SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>,
-            SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>
+            SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>,
+            SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
         >::callMethodWithReply(
                 this->proxy_,
                 setMethodId_,
                 setReliable_,
-				(_info ? _info : &defaultCallInfo),
+                (_info ? _info : &defaultCallInfo),
                 deployedRequest,
                 _status,
                 deployedResponse);
@@ -139,18 +139,18 @@ public:
 
     std::future<CommonAPI::CallStatus> setValueAsync(const ValueType &_request,
                                                      AttributeAsyncCallback _callback,
-													 const CommonAPI::CallInfo *_info) {
-        CommonAPI::Deployable<ValueType, _AttributeDepl> deployedRequest(_request, this->depl_);
-        CommonAPI::Deployable<ValueType, _AttributeDepl> deployedResponse(this->depl_);
+                                                     const CommonAPI::CallInfo *_info) {
+        CommonAPI::Deployable<ValueType, AttributeDepl_> deployedRequest(_request, this->depl_);
+        CommonAPI::Deployable<ValueType, AttributeDepl_> deployedResponse(this->depl_);
         return ProxyHelper<
-                    SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>,
-                    SerializableArguments<CommonAPI::Deployable<ValueType, _AttributeDepl>>
+                    SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>,
+                    SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
                >::callMethodAsync(this->proxy_,
                                   setMethodId_,
                                   setReliable_,
-								  (_info ? _info : &defaultCallInfo),
+                                  (_info ? _info : &defaultCallInfo),
                                   deployedRequest,
-                                  [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, _AttributeDepl> _response) {
+                                  [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, AttributeDepl_> _response) {
                                       _callback(_status, _response.getValue());
                                   },
                                   std::make_tuple(deployedResponse));
@@ -161,23 +161,28 @@ protected:
     const bool setReliable_;
 };
 
-template <typename _AttributeType>
-class ObservableAttribute: public _AttributeType {
+template <typename AttributeType_>
+class ObservableAttribute: public AttributeType_ {
 public:
-    typedef typename _AttributeType::ValueType ValueType;
-    typedef typename _AttributeType::ValueTypeDepl ValueTypeDepl;
-    typedef typename _AttributeType::AttributeAsyncCallback AttributeAsyncCallback;
-    typedef typename _AttributeType::ChangedEvent ChangedEvent;
+    typedef typename AttributeType_::ValueType ValueType;
+    typedef typename AttributeType_::ValueTypeDepl ValueTypeDepl;
+    typedef typename AttributeType_::AttributeAsyncCallback AttributeAsyncCallback;
+    typedef typename AttributeType_::ChangedEvent ChangedEvent;
 
-    template <typename... _AttributeTypeArguments>
+    template <typename... AttributeType_Arguments>
     ObservableAttribute(Proxy &_proxy,
                         const eventgroup_id_t _eventgroupId,
                         const event_id_t _eventId,
-                        _AttributeTypeArguments... _arguments)
-        : _AttributeType(_proxy, _arguments...),
+                        const method_id_t _getMethodId,
+                        const bool _getReliable,
+                        AttributeType_Arguments... _arguments)
+        : AttributeType_(_proxy, _getMethodId, _getReliable, _arguments...),
           changedEvent_(_proxy,
                         _eventgroupId,
                         _eventId,
+                        true,
+                        _getMethodId,
+                        _getReliable,
                         std::make_tuple(CommonAPI::Deployable<ValueType, ValueTypeDepl>(this->depl_))) {
     }
 

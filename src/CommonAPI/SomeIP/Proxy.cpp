@@ -16,7 +16,7 @@ ProxyStatusEventHelper::ProxyStatusEventHelper(Proxy* proxy) :
         proxy_(proxy) {
 }
 
-void ProxyStatusEventHelper::onListenerAdded(const Listener& listener) {
+void ProxyStatusEventHelper::onListenerAdded(const Listener& listener, const Subscription) {
     if (proxy_->isAvailable()) {
         listener(AvailabilityStatus::AVAILABLE);
     }

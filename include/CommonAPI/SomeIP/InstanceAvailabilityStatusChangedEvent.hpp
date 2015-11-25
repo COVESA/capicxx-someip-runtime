@@ -29,24 +29,24 @@ public:
     COMMONAPI_EXPORT InstanceAvailabilityStatusChangedEvent(Proxy &_proxy,
                                            const std::string &_interfaceName,
                                            const service_id_t &_serviceId);
-	COMMONAPI_EXPORT virtual ~InstanceAvailabilityStatusChangedEvent();
+    COMMONAPI_EXPORT virtual ~InstanceAvailabilityStatusChangedEvent();
 
-	COMMONAPI_EXPORT virtual void onEventMessage(const Message& _message);
-	COMMONAPI_EXPORT void onServiceInstanceStatus(service_id_t _serviceId,
+    COMMONAPI_EXPORT virtual void onEventMessage(const Message& _message);
+    COMMONAPI_EXPORT void onServiceInstanceStatus(service_id_t _serviceId,
                                  instance_id_t _instanceId,
                                  bool _isAvailable);
-	COMMONAPI_EXPORT void getAvailableInstances(std::vector<std::string> *_instances);
-	COMMONAPI_EXPORT void getInstanceAvailabilityStatus(const std::string &_instanceAddress,
+    COMMONAPI_EXPORT void getAvailableInstances(std::vector<std::string> *_instances);
+    COMMONAPI_EXPORT void getInstanceAvailabilityStatus(const std::string &_instanceAddress,
                                        CommonAPI::AvailabilityStatus *_availablityStatus);
 
 protected:
-	COMMONAPI_EXPORT virtual void onFirstListenerAdded(const Listener& listener);
-	COMMONAPI_EXPORT virtual void onLastListenerRemoved(const Listener& listener);
+    COMMONAPI_EXPORT virtual void onFirstListenerAdded(const Listener& listener);
+    COMMONAPI_EXPORT virtual void onLastListenerRemoved(const Listener& listener);
 
 private:
-	COMMONAPI_EXPORT void addInstance(const CommonAPI::Address &_address,
+    COMMONAPI_EXPORT bool addInstance(const CommonAPI::Address &_address,
                      const instance_id_t &_instanceId);
-	COMMONAPI_EXPORT void removeInstance(const CommonAPI::Address &_address,
+    COMMONAPI_EXPORT bool removeInstance(const CommonAPI::Address &_address,
                         const instance_id_t &_instanceId);
 
 private:

@@ -16,7 +16,7 @@ Message::Message()
 }
 
 Message::Message(const std::shared_ptr<vsomeip::message> &_source)
-	: message_(_source) {
+    : message_(_source) {
 }
 
 Message::Message(const Message &_source)
@@ -25,7 +25,7 @@ Message::Message(const Message &_source)
 
 Message::Message(Message &&_source)
     : message_(_source.message_) {
-	_source.message_ = nullptr;
+    _source.message_ = nullptr;
 }
 
 Message::~Message() {
@@ -57,7 +57,7 @@ Message::operator bool() const {
 Message
 Message::createMethodCall(const Address &_address, const method_id_t _method, bool _reliable) {
     std::shared_ptr<vsomeip::message> message(
-    	vsomeip::runtime::get()->create_request(_reliable)
+        vsomeip::runtime::get()->create_request(_reliable)
     );
     message->set_service(_address.getService());
     message->set_instance(_address.getInstance());
@@ -74,10 +74,20 @@ Message::createResponseMessage() const {
 }
 
 Message
-Message::createNotificationMessage(
-		const Address &_address, const event_id_t _event, bool _reliable) {
+Message::createErrorResponseMessage(return_code_e _return_code) const {
     std::shared_ptr<vsomeip::message> message(
-    	vsomeip::runtime::get()->create_notification(_reliable)
+        vsomeip::runtime::get()->create_response(message_)
+    );
+    message->set_message_type(message_type_e::MT_ERROR);
+    message->set_return_code(_return_code);
+    return Message(message);
+}
+
+Message
+Message::createNotificationMessage(
+        const Address &_address, const event_id_t _event, bool _reliable) {
+    std::shared_ptr<vsomeip::message> message(
+        vsomeip::runtime::get()->create_notification(_reliable)
     );
     message->set_service(_address.getService());
     message->set_instance(_address.getInstance());
@@ -93,6 +103,14 @@ Message::isResponseType() const {
 bool
 Message::isErrorType() const {
     return (!message_ || (message_->get_message_type() == message_type_e::MT_ERROR));
+}
+
+bool Message::isRequestType() const {
+    return (!message_ || (message_->get_message_type() == message_type_e::MT_REQUEST));
+}
+
+bool Message::isRequestNoResponseType() const {
+    return (!message_ || (message_->get_message_type() == message_type_e::MT_REQUEST_NO_RETURN));
 }
 
 byte_t *
@@ -122,27 +140,27 @@ Message::getReturnCode() const {
     return message_->get_return_code();
 }
 
-const service_id_t
+service_id_t
 Message::getServiceId() const {
     return message_->get_service();
 }
 
-const instance_id_t
+instance_id_t
 Message::getInstanceId() const {
     return message_->get_instance();
 }
 
-const method_id_t
+method_id_t
 Message::getMethodId() const {
     return message_->get_method();
 }
 
-const client_id_t
+client_id_t
 Message::getClientId() const {
     return message_->get_client();
 }
 
-const session_id_t
+session_id_t
 Message::getSessionId() const {
     return message_->get_session();
 }

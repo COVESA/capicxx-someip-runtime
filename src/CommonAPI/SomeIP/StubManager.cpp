@@ -13,7 +13,7 @@ StubManager::StubManager(const std::shared_ptr<ProxyConnection> &_connection)
       : connection_(_connection){
     if (!_connection->isStubMessageHandlerSet()) {
         _connection->setStubMessageHandler(
-        	std::bind(&StubManager::handleMessage, this, std::placeholders::_1));
+            std::bind(&StubManager::handleMessage, this, std::placeholders::_1));
     }
 }
 

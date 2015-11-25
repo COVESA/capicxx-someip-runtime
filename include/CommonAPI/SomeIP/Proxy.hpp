@@ -27,7 +27,7 @@ class ProxyStatusEventHelper: public ProxyStatusEvent {
     ProxyStatusEventHelper(Proxy *_proxy);
 
  protected:
-    virtual void onListenerAdded(const Listener &_listener);
+    virtual void onListenerAdded(const Listener &_listener, const Subscription subscription);
 
     Proxy *proxy_;
 };
@@ -36,36 +36,36 @@ class Factory;
 class ProxyConnection;
 
 class Proxy
-		: public ProxyBase,
-		  public std::enable_shared_from_this<Proxy> {
+        : public ProxyBase,
+          public std::enable_shared_from_this<Proxy> {
 public:
-	COMMONAPI_EXPORT Proxy(const Address &_address,
+    COMMONAPI_EXPORT Proxy(const Address &_address,
           const std::shared_ptr<ProxyConnection> &_connection, bool hasSelective = false);
-	COMMONAPI_EXPORT virtual ~Proxy();
+    COMMONAPI_EXPORT virtual ~Proxy();
 
-	COMMONAPI_EXPORT void init();
+    COMMONAPI_EXPORT void init();
 
-	COMMONAPI_EXPORT virtual const Address &getSomeIpAddress() const;
+    COMMONAPI_EXPORT virtual const Address &getSomeIpAddress() const;
 
-	COMMONAPI_EXPORT virtual bool isAvailable() const;
-	COMMONAPI_EXPORT virtual bool isAvailableBlocking() const;
+    COMMONAPI_EXPORT virtual bool isAvailable() const;
+    COMMONAPI_EXPORT virtual bool isAvailableBlocking() const;
 
-	COMMONAPI_EXPORT virtual ProxyStatusEvent& getProxyStatusEvent();
-	COMMONAPI_EXPORT virtual InterfaceVersionAttribute& getInterfaceVersionAttribute();
+    COMMONAPI_EXPORT virtual ProxyStatusEvent& getProxyStatusEvent();
+    COMMONAPI_EXPORT virtual InterfaceVersionAttribute& getInterfaceVersionAttribute();
 
 private:
-	COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
+    COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
 
-	COMMONAPI_EXPORT void onServiceInstanceStatus(uint16_t serviceId, uint16_t instanceId, bool isAvailbale);
+    COMMONAPI_EXPORT void onServiceInstanceStatus(uint16_t serviceId, uint16_t instanceId, bool isAvailbale);
 
 private:
     Address address_;
 
     ProxyStatusEventHelper proxyStatusEvent_;
-    ReadonlyAttribute<InterfaceVersionAttribute> interfaceVersionAttribute_;//TODO to be removed!!!
 
     AvailabilityStatus availabilityStatus_;
     AvailabilityHandlerId_t availabilityHandlerId_;
+    ReadonlyAttribute<InterfaceVersionAttribute> interfaceVersionAttribute_;
 
     mutable std::mutex availabilityMutex_;
     mutable std::condition_variable availabilityCondition_;

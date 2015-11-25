@@ -10,8 +10,8 @@
 #include <vector>
 
 #if WIN32
-	#define LITTLE_ENDIAN 1234
-	#define BIG_ENDIAN 4321
+    #define LITTLE_ENDIAN 1234
+    #define BIG_ENDIAN 4321
 #endif
 
 namespace CommonAPI {

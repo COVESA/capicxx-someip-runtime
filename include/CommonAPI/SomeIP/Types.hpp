@@ -27,7 +27,7 @@ typedef vsomeip::length_t message_length_t;
 
 typedef vsomeip::return_code_e return_code_e;
 typedef vsomeip::message_type_e message_type_e;
-typedef vsomeip::event_type_e event_type_e;
+typedef vsomeip::state_type_e state_type_e;
 
 typedef vsomeip::major_version_t major_version_t;
 typedef vsomeip::minor_version_t minor_version_t;

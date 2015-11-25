@@ -15,17 +15,18 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-template<typename _Event, typename... _Arguments>
-class SelectiveEvent: public Event<_Event, _Arguments...> {
+template<typename Event_, typename... Arguments_>
+class SelectiveEvent: public Event<Event_, Arguments_...> {
 public:
-    typedef typename Event<_Event, _Arguments...>::Listener Listener;
-    typedef Event<_Event, _Arguments...> EventBase;
+    typedef typename Event<Event_, Arguments_...>::Listener Listener;
+    typedef Event<Event_, Arguments_...> EventBase;
 
     SelectiveEvent(ProxyBase &_proxy,
             const eventgroup_id_t _eventgroupId,
             const event_id_t _eventId,
-            std::tuple<_Arguments...> _arguments)
-        : EventBase(_proxy, _eventgroupId, _eventId, _arguments) {
+            bool _isField,
+            std::tuple<Arguments_...> _arguments)
+        : EventBase(_proxy, _eventgroupId, _eventId, _isField, _arguments) {
     }
 
     virtual ~SelectiveEvent() {}
@@ -38,9 +39,10 @@ protected:
         // TODO: can we send both ID request calls here?!
         message = this->proxy_.createMethodCall(0, true);
                 this->proxy_.sendIdentifyRequest(message);
+        auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
 
         this->proxy_.addEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, this);
+                this->eventId_, false, this, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {
