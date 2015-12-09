@@ -76,7 +76,7 @@ public:
     COMMONAPI_EXPORT virtual OutputStream &writeValue(const std::string &_value, const EmptyDeployment *_depl);
     COMMONAPI_EXPORT virtual OutputStream &writeValue(const std::string &_value, const StringDeployment *_depl);
 
-    COMMONAPI_EXPORT virtual OutputStream &writeValue(const ByteBuffer &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual OutputStream &writeValue(const ByteBuffer &_value, const ByteBufferDeployment *_depl);
 
     COMMONAPI_EXPORT virtual OutputStream &writeValue(const Version &_value, const EmptyDeployment *_depl);
 
@@ -120,29 +120,19 @@ public:
     template<typename... Types_>
     COMMONAPI_EXPORT OutputStream &writeValue(const Struct<Types_...> &_value,
                              const EmptyDeployment *_depl) {
-        pushPosition();
-        // Length field placeholder
-        _writeValue(0, 4);
-        pushPosition(); // Start of struct data
-
+        // don't write length field as default length width is 0
         if(!hasError()) {
             // Write struct content
             const auto itsSize(std::tuple_size<std::tuple<Types_...>>::value);
             StructWriter<itsSize-1, OutputStream, Struct<Types_...>, EmptyDeployment>{}((*this), _value, _depl);
         }
-
-        // Write actual value of length field
-        size_t length = getPosition() - popPosition();
-        size_t position = popPosition();
-        _writeValueAt(uint32_t(length), 4, uint32_t(position));
-
         return (*this);
     }
 
     template<typename Deployment_, typename... Types_>
     COMMONAPI_EXPORT OutputStream &writeValue(const Struct<Types_...> &_value,
                              const Deployment_ *_depl) {
-        uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 4);
+        uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 0);
 
         if (structLengthWidth != 0) {
             pushPosition();
@@ -200,10 +190,10 @@ public:
         if (unionDefaultOrder) {
             pushPosition();
             _writeValue(0, unionLengthWidth);
-            _writeValue(_value.getValueType(), unionTypeWidth);
+            _writeValue(uint8_t(_value.getMaxValueType()) - _value.getValueType() + 1, unionTypeWidth);
             pushPosition();
         } else {
-            _writeValue(_value.getValueType(), unionTypeWidth);
+            _writeValue(uint8_t(_value.getMaxValueType()) - _value.getValueType() + 1, unionTypeWidth);
             pushPosition();
             _writeValue(0, unionLengthWidth);
             pushPosition();
@@ -390,8 +380,6 @@ public:
     #endif
     }
 
-    COMMONAPI_EXPORT OutputStream &_writeString(const std::string &_value, const StringDeployment *_depl);
-
     /**
      * Fills the stream with 0-bytes to make the next value be aligned to the boundary given.
      * This means that as many 0-bytes are written to the buffer as are necessary
@@ -426,12 +414,7 @@ public:
     COMMONAPI_EXPORT void _writeRaw(const byte_t *_data, const size_t _size);
     COMMONAPI_EXPORT void _writeRawAt(const byte_t *_data, const size_t _size, const size_t _position);
 
-    inline void _printPayload() {
-        for (auto b : payload_) {
-            std::cout << std::setfill('0') << std::hex << std::setw(2) << (int)b << " ";
-        }
-        std::cout << std::endl;
-    }
+    COMMONAPI_EXPORT void _writeBom(const StringDeployment *_depl);
 
 protected:
     std::vector<byte_t> payload_;

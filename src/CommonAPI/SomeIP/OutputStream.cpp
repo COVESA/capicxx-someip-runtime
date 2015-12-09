@@ -136,23 +136,14 @@ OutputStream& OutputStream::_writeValueAt(const uint32_t &_value, const uint8_t 
 }
 
 OutputStream& OutputStream::writeValue(const std::string &_value, const EmptyDeployment *) {
-    bool errorOccurred = false;
-    size_t stringLength = _value.size() + 1; //adding null termination
-
-    _writeValue(uint32_t(stringLength), 4);
-
-    if(!errorOccurred) {
-        // Write string content
-        _writeString(_value, nullptr);
-    }
-
-    return (*this);
+    return writeValue(_value, static_cast<const StringDeployment *>(nullptr));
 }
 
 OutputStream& OutputStream::writeValue(const std::string &_value, const StringDeployment *_depl) {
 
     bool errorOccurred = false;
-    size_t stringLength;
+    size_t size, terminationSize(2);
+    size_t bomSize(2);
     byte_t *bytes;
 
     //Determine string length
@@ -164,19 +155,18 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
         switch (_depl->stringEncoding_)
         {
             case StringEncoding::UTF16BE:
-                encoder->utf8To16((byte_t *)_value.c_str(), BIG_ENDIAN, status, &bytes, stringLength);
-                delete[] bytes;
-                bytes = NULL;
+                encoder->utf8To16((byte_t *)_value.c_str(), BIG_ENDIAN, status, &bytes, size);
                 break;
 
             case StringEncoding::UTF16LE:
-                encoder->utf8To16((byte_t *)_value.c_str(), LITTLE_ENDIAN, status, &bytes, stringLength);
-                delete[] bytes;
-                bytes = NULL;
+                encoder->utf8To16((byte_t *)_value.c_str(), LITTLE_ENDIAN, status, &bytes, size);
                 break;
 
             default:
-                stringLength = _value.size();
+                bytes = (byte_t *)(_value.c_str());
+                size = _value.size();
+                bomSize = 3;
+                terminationSize = 1;
                 break;
         }
 
@@ -187,34 +177,59 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
 
     } else
     {
-        stringLength = _value.size() + 1;   //adding null termination
+        bytes = (byte_t *)(_value.c_str());
+        size = _value.size();
+        bomSize = 3;
+        terminationSize = 1;
     }
 
     //write string length
     if (_depl != nullptr) {
-        if (_depl->stringLengthWidth_ == 0) {
-            if (_depl->stringLength_ != stringLength) {
+        if (_depl->stringLengthWidth_ == 0
+                && _depl->stringLength_  != size + terminationSize + bomSize ) {
                 errorOccurred = true;
-            }
         } else {
-            _writeValue(uint32_t(stringLength), _depl->stringLengthWidth_);
+            _writeValue(uint32_t(size + terminationSize + bomSize),
+                    _depl->stringLengthWidth_);
         }
     } else {
-        _writeValue(uint32_t(stringLength), 4);
+        _writeValue(uint32_t(size + terminationSize + bomSize), 4);
     }
 
+
     if(!errorOccurred) {
-        // Write string content
-        _writeString(_value, _depl);
+        // Write BOM
+        _writeBom(_depl);
+
+        // Write sting content
+        _writeRaw(bytes, size);
+
+        // Write termination
+        const byte_t termination[] = { 0x00, 0x00 };
+        _writeRaw(termination, terminationSize);
+    }
+
+    if (bytes != (byte_t*)_value.c_str()) {
+        delete [] bytes;
     }
 
     return (*this);
 }
 
-OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const EmptyDeployment *) {
+OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBufferDeployment *_depl) {
+    uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
+    uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
+
     pushPosition();     // Start of length field
     _writeValue(0, 4);  // Length field placeholder
     pushPosition();     // Start of vector data
+
+    if (byteBufferMinLength != 0 && _value.size() < byteBufferMinLength) {
+        errorOccurred_ = true;
+    }
+    if (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength) {
+        errorOccurred_ = true;
+    }
 
     if (!hasError()) {
         // Write array/vector content
@@ -269,57 +284,21 @@ void OutputStream::_writeRawAt(const byte_t *_data, const size_t _size, const si
     std::memcpy(&payload_[_position], _data, _size);
 }
 
-OutputStream& OutputStream::_writeString(const std::string &_value, const StringDeployment *_depl) {
-    assert(_value.c_str()[_value.size()] == '\0');
+void OutputStream::_writeBom(const StringDeployment *_depl) {
+    const byte_t utf8Bom[] = { 0xEF, 0xBB, 0xBF };
+    const byte_t utf16LeBom[] = { 0xFF, 0xFE };
+    const byte_t utf16BeBom[] = { 0xFE, 0xFF };
 
-    bool converted = false;
-    size_t stringLength;
-    byte_t *bytes;
-
-    // Encoding
-    if(_depl != nullptr)
-    {
-        EncodingStatus status = EncodingStatus::SUCCESS;
-        std::shared_ptr<StringEncoder> encoder = std::make_shared<StringEncoder>();
-
-        switch (_depl->stringEncoding_)
-        {
-            case StringEncoding::UTF16BE:
-                encoder->utf8To16((byte_t *)_value.c_str(), BIG_ENDIAN, status, &bytes, stringLength);
-                converted = true;
-                break;
-
-            case StringEncoding::UTF16LE:
-                encoder->utf8To16((byte_t *)_value.c_str(), LITTLE_ENDIAN, status, &bytes, stringLength);
-                converted = true;
-                break;
-
-            default:
-                bytes = (byte_t *)_value.c_str();
-                stringLength = _value.size();
-                break;
-        }
-
-        if(status != EncodingStatus::SUCCESS)
-        {
-            //TODO error handling
-        }
-
-    } else
-    {
-        bytes = (byte_t *)_value.c_str();
-        stringLength = _value.size() + 1;
+    if (_depl == NULL ||
+            (_depl != NULL && _depl->stringEncoding_ == StringEncoding::UTF8)) {
+        _writeRaw(utf8Bom, sizeof(utf8Bom));
+    } else if (_depl->stringEncoding_ == StringEncoding::UTF16LE) {
+        _writeRaw(utf16LeBom, sizeof(utf16LeBom));
+    } else if (_depl->stringEncoding_ == StringEncoding::UTF16BE) {
+        _writeRaw(utf16BeBom, sizeof(utf16BeBom));
+    } else {
+        errorOccurred_ = true;
     }
-
-    _writeRaw(bytes, stringLength);
-
-    if(converted)
-    {
-        delete[] bytes;
-        bytes = NULL;
-    }
-
-    return (*this);
 }
 
 void OutputStream::flush() {

@@ -14,6 +14,9 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
+#include <iostream>
+#include <string>
+
 
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/ClientId.hpp>
@@ -133,11 +136,11 @@ struct StubEventHelper<In_<InArgs_...>> {
                                  const InArgs_&... _in) {
 
         Message message = Message::createNotificationMessage(_address, _event, false);
-
         if (sizeof...(InArgs_) > 0) {
             OutputStream output(message);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
                 COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper: serialization failed!");
+
                 return false;
             }
             output.flush();
@@ -161,18 +164,17 @@ struct StubEventHelper<In_<InArgs_...>> {
                           const Stub_ &_stub,
                           const event_id_t &_event,
                           const InArgs_&... _in) {
-
         Message message = Message::createNotificationMessage(
                 _stub.getSomeIpAddress(), _event, false);
 
         if (sizeof...(InArgs_) > 0) {
             OutputStream output(message);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
+                COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper 2: serialization failed!");
                 return false;
             }
             output.flush();
         }
-
         return _stub.getConnection()->sendEvent(message, _client);
     }
 };
@@ -216,6 +218,7 @@ private:
                                         const std::shared_ptr<StubClass_> &_stub,
                                         StubAdapterHelperType &_adapterHelper,
                                       index_sequence<InArgIndices_...>) {
+        (void)_adapterHelper;
 
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message);
@@ -269,7 +272,7 @@ public:
                          StubAdapterHelperType &_adapterHelper) {
         connection_ = _adapterHelper.getConnection();
         return dispatchMessageHelper(
-                    _message, _stub, _adapterHelper,
+                    _message, _stub,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
                     typename make_sequence_range<sizeof...(OutArgs_), 0>::type());
     }
@@ -288,11 +291,8 @@ private:
     template <int... InArgIndices_, int... OutArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                         const std::shared_ptr<StubClass_> &_stub,
-                                        StubAdapterHelperType &_adapterHelper,
                                       index_sequence<InArgIndices_...>,
                                       index_sequence<OutArgIndices_...>) {
-        (void)_adapterHelper;
-
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
             connection_->sendMessage(error);

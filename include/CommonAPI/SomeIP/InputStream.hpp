@@ -30,6 +30,7 @@
 #include <stack>
 
 #include <CommonAPI/Export.hpp>
+#include <CommonAPI/SomeIP/Deployment.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -61,7 +62,7 @@ public:
 
     COMMONAPI_EXPORT virtual InputStream &readValue(std::string &_value, const EmptyDeployment *_depl);
     COMMONAPI_EXPORT virtual InputStream &readValue(std::string &_value, const StringDeployment *_depl);
-    COMMONAPI_EXPORT virtual InputStream &readValue(ByteBuffer &_value, const EmptyDeployment *_depl);
+    COMMONAPI_EXPORT virtual InputStream &readValue(ByteBuffer &_value, const ByteBufferDeployment *_depl);
 
     COMMONAPI_EXPORT virtual InputStream &readValue(Version &_value, const EmptyDeployment *_depl);
 
@@ -105,24 +106,11 @@ public:
     template<typename... Types_>
     COMMONAPI_EXPORT InputStream &readValue(Struct<Types_...> &_value,
                            const EmptyDeployment *_depl) {
-        uint32_t itsSize;
-
-        // Read struct size
-        readValue(itsSize, 4, true);
-
-        // Read struct fields, if reading size has been successful
         if (!hasError()) {
-            size_t remainingBeforeRead = remaining_;
-
             const auto itsFieldSize(std::tuple_size<std::tuple<Types_...>>::value);
             StructReader<itsFieldSize-1, InputStream, Struct<Types_...>, EmptyDeployment>{}(
                 (*this), _value, _depl);
-
-            if (itsSize != (remainingBeforeRead - remaining_)) {
-                errorOccurred_ = true;
-            }
         }
-
         return (*this);
     }
 
@@ -130,8 +118,7 @@ public:
     COMMONAPI_EXPORT InputStream &readValue(Struct<Types_...> &_value,
                            const Deployment_ *_depl) {
         uint32_t itsSize;
-
-        uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 4);
+        uint8_t structLengthWidth = (_depl ? _depl->structLengthWidth_ : 0);
 
         // Read struct size
         readValue(itsSize, structLengthWidth, true);
@@ -151,7 +138,6 @@ public:
                 }
             }
         }
-
         return (*this);
     }
 
@@ -193,7 +179,7 @@ public:
         }
 
         // CommonAPI variant supports only 255 different union types!
-        _value.valueType_ = uint8_t((itsType > 255) ? 255 : itsType);
+        _value.valueType_ = uint8_t((itsType > 255) ? 255 : uint8_t(_value.getMaxValueType()) - itsType + 1);
 
         if (!hasError()) {
             size_t remainingBeforeRead = remaining_;
@@ -202,17 +188,16 @@ public:
             ApplyStreamVisitor<InputStreamReadVisitor<InputStream, Types_... >,
                 Variant<Types_...>, Deployment_, Types_...>::visit(visitor, _value, _depl);
 
+            size_t paddingCount = 0;
             if (unionLengthWidth != 0) {
-                if (itsSize != (remainingBeforeRead - remaining_)) {
-                    errorOccurred_ = true;
-                }
+                paddingCount = itsSize - (remainingBeforeRead - remaining_);
             } else {
-                size_t paddingCount = _depl->unionMaxLength_ - (remainingBeforeRead - remaining_);
-                if (paddingCount < 0) {
-                    errorOccurred_ = true;
-                } else {
-                    (void)_readRaw(paddingCount);
-                }
+                paddingCount = _depl->unionMaxLength_ - (remainingBeforeRead - remaining_);
+            }
+            if (paddingCount < 0) {
+                errorOccurred_ = true;
+            } else {
+                (void)_readRaw(paddingCount);
             }
         }
 
@@ -236,7 +221,8 @@ public:
 
         // Read elements, if reading size has been successful
         if (!hasError()) {
-            while (itsSize > 0 || arrayLengthWidth == 0) {
+            while (itsSize > 0 || (arrayLengthWidth == 0 && _value.size() < arrayMaxLength)) {
+
                 size_t remainingBeforeRead = remaining_;
 
                 ElementType_ itsElement;
@@ -267,6 +253,8 @@ public:
                     errorOccurred_ = true;
                 }
             }
+
+
         }
 
         return (*this);

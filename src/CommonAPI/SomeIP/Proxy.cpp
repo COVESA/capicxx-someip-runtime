@@ -30,7 +30,8 @@ void Proxy::onServiceInstanceStatus(service_id_t serviceId,
                     AvailabilityStatus::NOT_AVAILABLE;
 
     if (isAvailable) {
-        getConnection()->sendPendingSubscriptions(serviceId, instanceId);
+        getConnection()->sendPendingSubscriptions(serviceId, instanceId,
+                address_.getMajorVersion());
     }
 
     proxyStatusEvent_.notifyListeners(availabilityStatus_);

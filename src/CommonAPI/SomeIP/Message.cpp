@@ -62,6 +62,7 @@ Message::createMethodCall(const Address &_address, const method_id_t _method, bo
     message->set_service(_address.getService());
     message->set_instance(_address.getInstance());
     message->set_method(_method);
+    message->set_interface_version(_address.getMajorVersion());
     return Message(message);
 }
 
@@ -92,6 +93,7 @@ Message::createNotificationMessage(
     message->set_service(_address.getService());
     message->set_instance(_address.getInstance());
     message->set_method(_event);
+    message->set_interface_version(_address.getMajorVersion());
     return Message(message);
 }
 

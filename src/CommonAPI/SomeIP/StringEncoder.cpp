@@ -15,6 +15,37 @@ const uint16_t SURROGATE_MAX        = 0xdfff;
 const uint32_t CODE_POINT_MAX       = 0x0010ffff;
 const uint16_t UNICODE_MAX          = 0xffff;
 
+bool StringEncoder::checkBom(byte_t *&_data, uint32_t &_size, StringEncoding _encoding) {
+    bool result(false);
+    if (_size > 3) { // BOM + Termination byte(s)
+        switch (_encoding) {
+        case StringEncoding::UTF8:
+            if (_data[0] == 0xEF && _data[1] == 0xBB && _data[2] == 0xBF) {
+                _data = _data + 3;
+                _size = _size - 3;
+                result = true;
+            };
+            break;
+        case StringEncoding::UTF16LE:
+            if (_data[0] == 0xFF && _data[1] == 0xFE) {
+                _data = _data + 2;
+                _size = _size - 2;
+                result = true;
+            };
+            break;
+        case StringEncoding::UTF16BE:
+            if (_data[0] == 0xFE && _data[1] == 0xFF) {
+                _data = _data + 2;
+                _size = _size - 2;
+                result = true;
+            };
+            break;
+        }
+    }
+
+    return result;
+}
+
 void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, EncodingStatus &_status, byte_t **_result, size_t &_length)
 {
     _status = EncodingStatus::SUCCESS;
@@ -103,7 +134,6 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
         j++;
     }
     tmp[_length-1] = '\0';
-
     *_result = tmp;
 }
 

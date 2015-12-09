@@ -27,14 +27,15 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
  public:
     typedef std::function< void(CallStatus, ArgTypes_...) > FunctionType;
 
-    static std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > create(FunctionType &&callback) {
+    static std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > create(FunctionType &&callback, std::tuple< ArgTypes_... >&& _argTuple) {
         return std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler >(
-                new ProxyAsyncCallbackHandler(std::move(callback)));
+                new ProxyAsyncCallbackHandler(std::move(callback), std::move(_argTuple)));
     }
 
     ProxyAsyncCallbackHandler() = delete;
-    ProxyAsyncCallbackHandler(FunctionType&& callback):
-        callback_(std::move(callback)) {
+    ProxyAsyncCallbackHandler(FunctionType&& callback, std::tuple< ArgTypes_... >&& _argTuple):
+        callback_(std::move(callback)),
+        argTuple_(std::move(_argTuple)) {
     }
 
     virtual std::future< CallStatus > getFuture() {
@@ -49,9 +50,9 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
     template < int... ArgIndices_ >
     inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< ArgIndices_... >) const {
         CallStatus callStatus = _callStatus;
-        std::tuple< ArgTypes_... > argTuple;
+        std::tuple< ArgTypes_... > argTuple = argTuple_;
 
-        (void)argTuple;
+        (void) argTuple;
 
         if (callStatus == CallStatus::SUCCESS) {
             if (!message.isErrorType()) {
@@ -71,6 +72,7 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
 
     std::promise< CallStatus > promise_;
     const FunctionType callback_;
+    std::tuple< ArgTypes_... > argTuple_;
 };
 
 } // namespace SomeIP

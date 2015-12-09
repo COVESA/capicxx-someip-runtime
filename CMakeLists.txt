@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 1)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 4)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 5)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -88,9 +88,9 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.1.4 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.1.5 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.1.4 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(CommonAPI 3.1.5 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
@@ -101,7 +101,7 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 2.0.0 REQUIRED)
+find_package (vsomeip 2.0.1 REQUIRED)
 message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
@@ -185,7 +185,7 @@ install (
 # create pkg-config file
 if(NOT WIN32)
         configure_file(CommonAPI-SomeIP.pc.in ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc @ONLY)
-        install(FILES ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc DESTINATION lib/pkconfig)
+        install(FILES ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc DESTINATION lib/pkgconfig)
 endif()
 
 ##############################################################################

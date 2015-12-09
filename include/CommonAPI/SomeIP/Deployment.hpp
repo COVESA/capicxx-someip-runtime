@@ -40,6 +40,15 @@ struct StringDeployment : CommonAPI::Deployment<> {
     StringEncoding stringEncoding_;
 };
 
+struct ByteBufferDeployment : CommonAPI::Deployment<> {
+    ByteBufferDeployment(uint32_t _byteBufferMinLength, uint32_t _byteBufferMaxLength)
+        : byteBufferMinLength_(_byteBufferMinLength),
+          byteBufferMaxLength_(_byteBufferMaxLength) {}
+
+    uint32_t byteBufferMinLength_; // == 0 means unlimited
+    uint32_t byteBufferMaxLength_;
+};
+
 template<typename... Types_>
 struct StructDeployment : CommonAPI::Deployment<Types_...> {
     StructDeployment(uint8_t _structLengthWidth, Types_*... t)

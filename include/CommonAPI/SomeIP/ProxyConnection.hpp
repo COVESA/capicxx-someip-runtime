@@ -115,7 +115,7 @@ class ProxyConnection {
     virtual void requestService(const Address &_address, bool _hasSelective = false) = 0;
 
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) = 0;
+            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) = 0;
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event) = 0;
 
@@ -128,7 +128,9 @@ class ProxyConnection {
     virtual void setStubMessageHandler(std::function<bool(const Message&)> stubMessageHandler) = 0;
     virtual bool isStubMessageHandlerSet() = 0;
 
-    virtual void sendPendingSubscriptions(service_id_t serviceId, instance_id_t instanceId) = 0;
+    virtual void sendPendingSubscriptions(service_id_t serviceId,
+                                          instance_id_t instanceId,
+                                          major_version_t major) = 0;
 
     virtual void getInitialEvent(service_id_t _service, instance_id_t _instance, Message _message,
             EventHandler *_eventHandler, uint32_t _tag) = 0;

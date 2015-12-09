@@ -88,7 +88,7 @@ public:
             false);
 
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField);
+            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField);
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event);
 
@@ -106,7 +106,7 @@ public:
     virtual const ConnectionId_t& getConnectionId();
 
     virtual void sendPendingSubscriptions(service_id_t serviceId,
-            instance_id_t instanceId);
+            instance_id_t instanceId, major_version_t major);
 
     virtual void getInitialEvent(service_id_t _service, instance_id_t _instance,
             Message _message, EventHandler *_eventHandler,

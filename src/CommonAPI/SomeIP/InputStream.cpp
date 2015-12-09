@@ -119,26 +119,7 @@ InputStream& InputStream::readValue(uint32_t &_value, const uint8_t &_width, con
 }
 
 InputStream& InputStream::readValue(std::string &_value, const EmptyDeployment *) {
-    uint32_t itsSize(0);
-    readValue(itsSize, 4, false);
-
-    if(itsSize > remaining_) {
-        errorOccurred_ = true;
-    }
-
-    // Read string, if reading size has been successful
-    if(!hasError()) {
-        char *data = reinterpret_cast<char*>(_readRaw(itsSize));
-
-        if(data[itsSize - 1] == '\0') {
-            // The string contained in a message is required to be 0-terminated, therefore the following line works
-            _value = data; // TODO encoding, byte order
-        } else {
-            errorOccurred_ = true;
-        }
-    }
-
-    return *this;
+    return readValue(_value, static_cast<const StringDeployment*>(nullptr));
 }
 
 InputStream& InputStream::readValue(std::string &_value, const StringDeployment *_depl) {
@@ -161,55 +142,76 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
 
     // Read string, if reading size has been successful
     if(!hasError()) {
-        char *data = reinterpret_cast<char*>(_readRaw(itsSize));
 
-        byte_t *bytes;
-        bool converted = false;
+        byte_t *data = _readRaw(itsSize);
+
+        std::shared_ptr<StringEncoder> encoder = std::make_shared<StringEncoder>();
+        byte_t *bytes = NULL;
+
         if(_depl != nullptr)
         {
-            EncodingStatus status = EncodingStatus::SUCCESS;
+            EncodingStatus status = EncodingStatus::UNKNOWN;
             size_t length = 0;
-            std::shared_ptr<StringEncoder> encoder = std::make_shared<StringEncoder>();
 
-            switch (_depl->stringEncoding_)
-            {
-                case StringEncoding::UTF16BE:
-                    encoder->utf16To8((byte_t *) data, BIG_ENDIAN, itsSize, status, &bytes, length);
-                    converted = true;
-                    break;
+            if (encoder->checkBom(data, itsSize, _depl->stringEncoding_)) {
+                switch (_depl->stringEncoding_)
+                {
+                    case StringEncoding::UTF16BE:
+                        //TODO do not return error if itsSize is odd and itsSize is too short
+                        if(itsSize % 2 != 0 && data[itsSize - 1] == 0x00 && data[itsSize - 2] == 0x00 )
+                            errorOccurred_ = true;
+                        if(!hasError())
+                            encoder->utf16To8((byte_t *) data, BIG_ENDIAN, itsSize - 2, status, &bytes, length);
+                        break;
 
-                case StringEncoding::UTF16LE:
-                    encoder->utf16To8((byte_t *) data, LITTLE_ENDIAN, itsSize, status, &bytes, length);
-                    converted = true;
-                    break;
+                    case StringEncoding::UTF16LE:
+                        if(itsSize % 2 != 0 && data[itsSize - 1] == 0x00 && data[itsSize - 2] == 0x00 )
+                            errorOccurred_ = true;
+                        if(!hasError())
+                            encoder->utf16To8((byte_t *) data, LITTLE_ENDIAN, itsSize - 2, status, &bytes, length);
+                        break;
 
-                default:
-                    bytes = (byte_t *) data;
-                    break;
+                    default:
+                        bytes = (byte_t *) data;
+                        break;
+                }
+
+                status = EncodingStatus::SUCCESS;
+            } else {
+                status = EncodingStatus::INVALID_BOM;
             }
 
             if(status != EncodingStatus::SUCCESS)
             {
-                //TODO error handling
+                errorOccurred_ = true;
             }
         } else
         {
-            bytes = (byte_t *) data;
+            if (encoder->checkBom(data, itsSize, StringEncoding::UTF8)) {
+                bytes = new byte_t[itsSize];
+                memcpy(bytes, (byte_t *) data, itsSize);
+            }
+            else
+                errorOccurred_ = true;
         }
-
-        _value = (char*)bytes;
-
-        if(converted)
-        {
-            delete[] bytes;
-            bytes = NULL;
-        }
+        if (bytes == NULL) {
+	        _value = "";
+	    } else {
+	        _value = (char*)bytes;
+	        //only delete bytes if not allocated in this function (this is the case for deployed fixed length UTF8 strings)
+	        if( bytes != (byte_t *) data)
+	            delete[] bytes;
+	        bytes = NULL;
+	    }
     }
 
     return *this;
 }
 
-InputStream& InputStream::readValue(ByteBuffer &_value, const EmptyDeployment *) {
+InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployment *_depl) {
+    uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
+    uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
+
     uint32_t itsSize;
 
     // Read array size
@@ -232,6 +234,13 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const EmptyDeployment *)
             _value.push_back(std::move(itsElement));
 
             itsSize -= uint32_t(remainingBeforeRead - remaining_);
+        }
+
+        if (byteBufferMinLength != 0 && _value.size() < byteBufferMinLength) {
+            errorOccurred_ = true;
+        }
+        if (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength) {
+            errorOccurred_ = true;
         }
     }
 

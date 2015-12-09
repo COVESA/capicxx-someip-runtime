@@ -6,6 +6,7 @@
 #ifndef INCLUDE_COMMONAPI_SOMEIP_STRINGENCODER_HPP_
 #define INCLUDE_COMMONAPI_SOMEIP_STRINGENCODER_HPP_
 
+#include <CommonAPI/SomeIP/Deployment.hpp>
 #include <CommonAPI/SomeIP/Types.hpp>
 #include <vector>
 
@@ -21,8 +22,10 @@ typedef std::vector<byte_t> bytes_t;
 
 enum class EncodingStatus
 {
+    UNKNOWN,
     SUCCESS,
     NOT_ENOUGH_ROOM,
+    INVALID_BOM,
     INVALID_LEAD,
     INVALID_CODE_POINT,
     INCOMPLETE_SEQUENCE,
@@ -32,6 +35,8 @@ enum class EncodingStatus
 
 class StringEncoder {
 public:
+    bool checkBom(byte_t *&_data, uint32_t &_size, StringEncoding _encoding);
+
     void utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, EncodingStatus &_status, byte_t **_result, size_t &_length);
     void utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_status, byte_t **_result, size_t &_length);
 

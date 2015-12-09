@@ -30,6 +30,14 @@ class Proxy;
 template <class, class>
 struct ProxyHelper;
 
+#ifdef WIN32
+// Visual Studio 2013 does not support 'magic statics' yet.
+// Change back when switched to Visual Studio 2015 or higher.
+static std::mutex callMethod_mutex_;
+static std::mutex callMethodWithReply_mutex_;
+static std::mutex callMethodAsync_mutex_;
+#endif
+
 template <
     template <class...> class In_, class... InArgs_,
     template <class...> class Out_, class... OutArgs_>
@@ -42,8 +50,9 @@ template <
             const bool _reliable,
             const InArgs_ &... _inArgs,
             CommonAPI::CallStatus &_callStatus) {
-            
+#ifndef WIN32
             static std::mutex callMethod_mutex_;
+#endif
             std::lock_guard<std::mutex> lock(callMethod_mutex_);
             Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
             callMethod(_proxy, methodCall, _inArgs..., _callStatus);
@@ -157,7 +166,9 @@ template <
                     const InArgs_&... _inArgs,
                     CommonAPI::CallStatus &_callStatus,
                     OutArgs_&... _outArgs) {
+#ifndef WIN32
         static std::mutex callMethodWithReply_mutex_;
+#endif
         std::lock_guard<std::mutex> lock(callMethodWithReply_mutex_);
         Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
         callMethodWithReply(_proxy, methodCall, _info, _inArgs..., _callStatus, _outArgs...);
@@ -172,7 +183,9 @@ template <
                     const InArgs_&... _inArgs,
                     AsyncCallback_ _asyncCallback,
                     std::tuple<OutArgs_...> _outArgs) {
+#ifndef WIN32
         static std::mutex callMethodAsync_mutex_;
+#endif
         std::lock_guard<std::mutex> lock(callMethodAsync_mutex_);
         Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
         return callMethodAsync(_proxy, methodCall, _info, _inArgs..., _asyncCallback, _outArgs);
@@ -202,7 +215,7 @@ template <
                                                _message,
                                                ProxyAsyncCallbackHandler<
                                                    OutArgs_...
-                                               >::create(std::move(_asyncCallback)),
+                                               >::create(std::move(_asyncCallback), std::move(_outArgs)),
                                                _info);
         } else {
             CallStatus callStatus = CallStatus::NOT_AVAILABLE;

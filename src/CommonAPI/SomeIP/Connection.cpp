@@ -552,12 +552,9 @@ Connection::requestService(const Address &_address, bool _hasSelective) {
 
 void
 Connection::registerEvent(service_id_t _service, instance_id_t _instance,
-        event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) {
-    std::set<eventgroup_id_t> itsEventGroups;
-    itsEventGroups.insert(_eventGroup);
-
+        event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) {
     application_->offer_event(_service, _instance,
-            _event, itsEventGroups, _isField);
+            _event, _eventGroups, _isField);
 }
 
 void
@@ -621,15 +618,16 @@ const ConnectionId_t& Connection::getConnectionId() {
     return static_cast<const ConnectionId_t&>(application_->get_name());
 }
 
-void Connection::sendPendingSubscriptions(service_id_t serviceId, instance_id_t instanceId) {
+void Connection::sendPendingSubscriptions(service_id_t serviceId, instance_id_t instanceId, major_version_t major) {
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
 
     auto findService = subscriptions_.find(serviceId);
     if (findService != subscriptions_.end()) {
         auto findInstance = findService->second.find(instanceId);
         if (findInstance != findService->second.end()) {
-            for (auto &e : findInstance->second)
-                application_->subscribe(serviceId, instanceId, e);
+            for (auto &e : findInstance->second) {
+                application_->subscribe(serviceId, instanceId, e, major);
+            }
         }
     }
 

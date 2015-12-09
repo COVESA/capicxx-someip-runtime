@@ -49,11 +49,11 @@ StubAdapter::onInterfaceMessage(const Message &) {
 }
 
 void
-StubAdapter::registerEvent(event_id_t _event, eventgroup_id_t _eventGroup,
+StubAdapter::registerEvent(event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups,
         bool _isField) {
     connection_->registerEvent(
             someipAddress_.getService(), someipAddress_.getInstance(),
-            _event, _eventGroup, _isField);
+            _event, _eventGroups, _isField);
 }
 
 void

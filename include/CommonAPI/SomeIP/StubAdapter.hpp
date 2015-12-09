@@ -11,6 +11,7 @@
 #define COMMONAPI_SOMEIP_STUB_ADAPTER_HPP_
 
 #include <memory>
+#include <set>
 #include <string>
 
 #include <CommonAPI/Export.hpp>
@@ -41,8 +42,8 @@ class StubAdapter: virtual public CommonAPI::StubAdapter, public InterfaceHandle
 
      COMMONAPI_EXPORT bool isManagingInterface();
 
-     COMMONAPI_EXPORT void registerEvent(event_id_t _event, eventgroup_id_t _eventGroup,
-             bool _isField);
+     COMMONAPI_EXPORT void registerEvent(event_id_t _event,
+             const std::set<eventgroup_id_t> &_eventGroups, bool _isField);
      COMMONAPI_EXPORT void unregisterEvent(event_id_t _event);
 
      COMMONAPI_EXPORT virtual bool onInterfaceMessage(const Message &message) = 0;
