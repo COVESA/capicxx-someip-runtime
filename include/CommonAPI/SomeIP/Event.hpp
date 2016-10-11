@@ -19,7 +19,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 template <typename Events_, typename... Arguments_>
-class Event: public Events_, public ProxyConnection::EventHandler {
+class Event: public Events_  {
 public:
     typedef typename Events_::ArgumentsTuple ArgumentsTuple;
     typedef typename Events_::Listener Listener;
@@ -32,6 +32,7 @@ public:
           bool _isLittleEndian,
           std::tuple<Arguments_...> _arguments)
         : proxy_(_proxy),
+          handler_(std::make_shared<Handler>(_proxy, this)),
           serviceId_(_proxy.getSomeIpAddress().getService()),
           instanceId_(_proxy.getSomeIpAddress().getInstance()),
           eventId_(_eventId),
@@ -52,6 +53,7 @@ public:
           const bool _getReliable,
           std::tuple<Arguments_...> _arguments)
         : proxy_(_proxy),
+          handler_(std::make_shared<Handler>(_proxy, this)),
           serviceId_(_proxy.getSomeIpAddress().getService()),
           instanceId_(_proxy.getSomeIpAddress().getInstance()),
           eventId_(_eventId),
@@ -66,19 +68,7 @@ public:
     virtual ~Event() {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = proxy_.getSomeIpAddress().getMinorVersion();
-        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, this, major, minor);
-    }
-
-    virtual void onEventMessage(const Message &_message) {
-        notificationMutex_.lock();
-        handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
-        notificationMutex_.unlock();
-    }
-
-    virtual void onInitialValueEventMessage(const Message&_message, const uint32_t tag) {
-        notificationMutex_.lock();
-        handleEventMessage(tag, _message, typename make_sequence<sizeof...(Arguments_)>::type());
-        notificationMutex_.unlock();
+        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_, major, minor);
     }
 
     virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
@@ -87,9 +77,42 @@ public:
     }
 
 protected:
+
+    class Handler : public ProxyConnection::EventHandler,
+                    public std::enable_shared_from_this<Handler> {
+    public:
+        Handler(ProxyBase&_proxy,
+                Event<Events_, Arguments_ ...>* _event) :
+            proxy_(_proxy),
+            event_(_event) {
+
+        }
+
+        virtual void onEventMessage(const Message &_message) {
+            notificationMutex_.lock();
+            event_->handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
+            notificationMutex_.unlock();
+        }
+
+        virtual void onInitialValueEventMessage(const Message&_message, const uint32_t tag) {
+            notificationMutex_.lock();
+            event_->handleEventMessage(tag, _message, typename make_sequence<sizeof...(Arguments_)>::type());
+            notificationMutex_.unlock();
+        }
+
+        virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
+            event_->onError(_errorCode, _tag);
+        }
+
+    private :
+        ProxyBase& proxy_;
+        Event<Events_, Arguments_ ...>* event_;
+        std::mutex notificationMutex_;
+    };
+
     virtual void onFirstListenerAdded(const Listener&) {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
-        proxy_.addEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, isField_, this, major);
+        proxy_.addEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, isField_, handler_, major);
     }
 
     virtual void onListenerAdded(const Listener &_listener, const Subscription _subscription) {
@@ -108,7 +131,7 @@ protected:
     virtual void onLastListenerRemoved(const Listener&) {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = proxy_.getSomeIpAddress().getMinorVersion();
-        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, this, major, minor);
+        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_, major, minor);
     }
 
     virtual void onListenerRemoved(const Listener&) {
@@ -158,6 +181,8 @@ protected:
     }
 
     ProxyBase &proxy_;
+    std::shared_ptr<Handler> handler_;
+
     const service_id_t serviceId_;
     const instance_id_t instanceId_;
     const event_id_t eventId_;
@@ -167,7 +192,6 @@ protected:
     const method_id_t getMethodId_;
     const bool getReliable_;
     std::tuple<Arguments_...> arguments_;
-    std::mutex notificationMutex_;
     std::mutex listeners_mutex_;
     std::set<Subscription> listeners_;
 };

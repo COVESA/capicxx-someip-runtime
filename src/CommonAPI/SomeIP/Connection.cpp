@@ -63,7 +63,7 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
         instance_id_t instanceId = _message->get_instance();
         event_id_t eventId = _message->get_method();
 
-        std::set<ProxyConnection::EventHandler *> handlers;
+        std::map<ProxyConnection::EventHandler*, std::weak_ptr<ProxyConnection::EventHandler>> handlers;
         {
             std::lock_guard<std::mutex> eventLock(eventHandlerMutex_);
             auto foundService = eventHandlers_.find(serviceId);
@@ -81,8 +81,10 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
         sendReceiveMutex_.unlock();
 
         // We must not hold the lock when calling the handlers!
-        for (auto handler : handlers)
-            handler->onEventMessage(Message(_message));
+        for (auto handler : handlers) {
+            if(auto itsHandler = handler.second.lock())
+                itsHandler->onEventMessage(Message(_message));
+        }
 
         return;
     }
@@ -145,7 +147,7 @@ void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _inst
 
 void Connection::handleAvailabilityChange(const service_id_t _service, instance_id_t _instance,
                                           bool _is_available) {
-    std::list<AvailabilityHandler_t> itsHandlers;
+    std::list<std::tuple<AvailabilityHandler_t, std::weak_ptr<Proxy>, void*>> itsHandlers;
 
     {
         std::unique_lock<std::mutex> itsLock(availabilityMutex_);
@@ -164,8 +166,10 @@ void Connection::handleAvailabilityChange(const service_id_t _service, instance_
         }
     }
 
-    for (auto h : itsHandlers)
-        h(_service, _instance, _is_available);
+    for (auto h : itsHandlers) {
+        if(auto itsProxy = std::get<1>(h).lock())
+            std::get<0>(h)(itsProxy, _service, _instance, _is_available, std::get<2>(h));
+    }
 
 }
 
@@ -417,13 +421,14 @@ void Connection::addEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        ProxyConnection::EventHandler* eventHandler,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
         major_version_t major,
         bool isField,
         bool isSelective) {
 
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
-    eventHandlers_[serviceId][instanceId][eventId].insert(eventHandler);
+    if(auto itsHandler = eventHandler.lock())
+        eventHandlers_[serviceId][instanceId][eventId][itsHandler.get()] = eventHandler;
     const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
 
     if(inserted) {
@@ -442,7 +447,7 @@ void Connection::removeEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        ProxyConnection::EventHandler* eventHandler,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
         major_version_t major,
         minor_version_t minor) {
     (void)major;
@@ -454,20 +459,22 @@ void Connection::removeEventHandler(
         if (foundInstance != foundService->second.end()) {
             auto foundEventId = foundInstance->second.find(eventId);
             if (foundEventId != foundInstance->second.end()) {
-                foundEventId->second.erase(eventHandler);
-                if (foundEventId->second.size() == 0) {
-                    foundInstance->second.erase(foundEventId);
+                if(auto itsHandler = eventHandler.lock()) {
+                    foundEventId->second.erase(itsHandler.get());
+                    if (foundEventId->second.size() == 0) {
+                        foundInstance->second.erase(foundEventId);
 
-                    //decrement subscription counter for given eventgroup
-                    auto s = subscriptionCounters_.find(serviceId);
-                    if (s != subscriptionCounters_.end()) {
-                        auto i = s->second.find(instanceId);
-                        if (i != s->second.end()) {
-                            auto g = i->second.find(eventGroupId);
-                            if (g != i->second.end()) {
-                                g->second--;
-                                if(g->second == 0) {
-                                    application_->unsubscribe(serviceId, instanceId, eventGroupId);
+                        //decrement subscription counter for given eventgroup
+                        auto s = subscriptionCounters_.find(serviceId);
+                        if (s != subscriptionCounters_.end()) {
+                            auto i = s->second.find(instanceId);
+                            if (i != s->second.end()) {
+                                auto g = i->second.find(eventGroupId);
+                                if (g != i->second.end()) {
+                                    g->second--;
+                                    if(g->second == 0) {
+                                        application_->unsubscribe(serviceId, instanceId, eventGroupId);
+                                    }
                                 }
                             }
                         }
@@ -519,14 +526,19 @@ void Connection::removeEventHandler(
 void Connection::subscribeForSelective(
         service_id_t serviceId, instance_id_t instanceId,
         eventgroup_id_t eventGroupId, event_id_t eventId,
-        ProxyConnection::EventHandler* eventHandler, uint32_t _tag,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler, uint32_t _tag,
         major_version_t major) {
     std::set<uint32_t> tags;
     tags.insert(_tag);
 
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     selectiveErrorHandlers_[serviceId][instanceId][eventGroupId].push(std::make_pair(eventHandler, tags));
-    pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][eventHandler].insert(_tag);
+
+    if(auto itsHandler = eventHandler.lock()) {
+        auto itsTags = pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][itsHandler.get()].second;
+        itsTags.insert(_tag);
+        pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][itsHandler.get()] = std::make_pair(eventHandler, itsTags);
+    }
 
     application_->subscribe(serviceId, instanceId, eventGroupId, major,
             vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
@@ -551,7 +563,7 @@ void Connection::addSelectiveErrorListener(service_id_t serviceId,
                             auto entry = it_eventgroup->second.front();
                             it_eventgroup->second.pop();
                             for (uint32_t tag : entry.second) {
-                                ProxyConnection::EventHandler* handler = entry.first;
+                                std::weak_ptr<ProxyConnection::EventHandler> handler = entry.first;
                                 if (auto lockedContext = mainLoopContext_.lock()) {
                                     std::shared_ptr<ErrQueueEntry> err_queue_entry =
                                             std::make_shared<ErrQueueEntry>(
@@ -559,7 +571,8 @@ void Connection::addSelectiveErrorListener(service_id_t serviceId,
                                                     serviceId, instanceId, eventGroupId);
                                     watch_->pushQueue(err_queue_entry);
                                 } else {
-                                    handler->onError(errorCode, tag);
+                                    if(auto itsHandler = handler.lock())
+                                        itsHandler->onError(errorCode, tag);
                                 }
                             }
                         }
@@ -580,7 +593,10 @@ Connection::isAvailable(const Address &_address) {
 
 AvailabilityHandlerId_t
 Connection::registerAvailabilityHandler(
-        const Address &_address, AvailabilityHandler_t _handler) {
+        const Address &_address,
+        AvailabilityHandler_t _handler,
+        std::weak_ptr<Proxy> _proxy,
+        void* _data) {
     static AvailabilityHandlerId_t itsHandlerId = 0;
     AvailabilityHandlerId_t itsCurrentHandlerId;
     bool isRegistered(false);
@@ -599,13 +615,13 @@ Connection::registerAvailabilityHandler(
         if (foundService != availabilityHandlers_.end()) {
             auto foundInstance = foundService->second.find(itsInstance);
             if (foundInstance != foundService->second.end()) {
-                foundInstance->second[itsCurrentHandlerId] = _handler;
+                foundInstance->second[itsCurrentHandlerId] = std::make_tuple(_handler, _proxy, _data);
                 isRegistered = true;
             } else {
-                foundService->second[itsInstance][itsCurrentHandlerId] = _handler;
+                foundService->second[itsInstance][itsCurrentHandlerId] = std::make_tuple(_handler, _proxy, _data);
             }
         } else {
-            availabilityHandlers_[itsService][itsInstance][itsCurrentHandlerId] = _handler;
+            availabilityHandlers_[itsService][itsInstance][itsCurrentHandlerId] = std::make_tuple(_handler, _proxy, _data);
         }
     }
 
@@ -790,16 +806,15 @@ void Connection::processErrQueueEntry(ErrQueueEntry &_errQueueEntry) {
             auto foundEventGroup = foundInstance->second.find(
                     _errQueueEntry.eventGroup_);
             if (foundEventGroup != foundInstance->second.end()) {
-                auto foundEventHandler = foundEventGroup->second.find(
-                        _errQueueEntry.eventHandler_);
-                if (foundEventHandler != foundEventGroup->second.end()) {
-                    auto foundSubscriptionId = foundEventHandler->second.find(
-                            _errQueueEntry.tag_);
-                    if (foundSubscriptionId
-                            != foundEventHandler->second.end()) {
-                        foundEventHandler->first->onError(
-                                _errQueueEntry.errorCode_,
-                                *foundSubscriptionId);
+                if(auto itsHandler = _errQueueEntry.eventHandler_.lock()) {
+                    auto foundEventHandlerPair = foundEventGroup->second.find(itsHandler.get());
+                    if (foundEventHandlerPair != foundEventGroup->second.end()) {
+                        auto foundSubscriptionId = foundEventHandlerPair->second.second.find(
+                                _errQueueEntry.tag_);
+                        if (foundSubscriptionId
+                                != foundEventHandlerPair->second.second.end()) {
+                            itsHandler->onError(_errQueueEntry.errorCode_, *foundSubscriptionId);
+                        }
                     }
                 }
             }
@@ -828,7 +843,7 @@ void Connection::queueSelectiveErrorHandler(service_id_t serviceId,
                             if (it_eventgroup != it_instance->second.end()) {
                                 for (auto its_handler : it_eventgroup->second) {
                                     selectiveErrorHandlers_[serviceId][instanceId][group].push(
-                                        std::make_pair(its_handler.first, its_handler.second));
+                                        std::make_pair(its_handler.second.first, its_handler.second.second));
                                 }
                             }
                         }
@@ -859,11 +874,12 @@ void Connection::getInitialEvent(service_id_t serviceId,
 }
 
 void Connection::eventInitialValueCallback(const CallStatus callStatus,
-            const Message& message, EventHandler *_eventHandler,
+            const Message& message, std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
             const uint32_t tag) {
 
-    if (_eventHandler && callStatus == CommonAPI::CallStatus::SUCCESS) {
-        _eventHandler->onInitialValueEventMessage(message, tag);
+    auto itsHandler = _eventHandler.lock();
+    if (itsHandler && callStatus == CommonAPI::CallStatus::SUCCESS) {
+        itsHandler->onInitialValueEventMessage(message, tag);
     } else {
         COMMONAPI_ERROR("Subscribe: Get initial attribute value failed!");
     }

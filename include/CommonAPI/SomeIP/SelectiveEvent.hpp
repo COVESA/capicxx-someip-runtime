@@ -40,21 +40,21 @@ protected:
     virtual void onFirstListenerAdded(const Listener&) {
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         this->proxy_.addEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, false, this, major, true);
+                this->eventId_, false, this->handler_, major, true);
     }
 
     virtual void onListenerAdded(const Listener &_listener, const uint32_t _subscription) {
         (void) _listener;
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         this->proxy_.subscribeForSelective(this->serviceId_, this->instanceId_,
-                this->eventgroupId_, this->eventId_, this, _subscription, major);
+                this->eventgroupId_, this->eventId_, this->handler_, _subscription, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = this->proxy_.getSomeIpAddress().getMinorVersion();
         this->proxy_.removeEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, this, major, minor);
+                this->eventId_, this->handler_, major, minor);
     }
 };
 

@@ -18,6 +18,8 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+class Proxy;
+
 typedef vsomeip::service_t service_id_t;
 typedef vsomeip::method_t method_id_t;
 typedef vsomeip::event_t event_id_t;
@@ -39,7 +41,7 @@ typedef vsomeip::minor_version_t minor_version_t;
 typedef int64_t ms_t;
 
 typedef uint32_t AvailabilityHandlerId_t;
-typedef std::function<void (service_id_t, instance_id_t, bool)> AvailabilityHandler_t;
+typedef std::function<void (std::shared_ptr<Proxy>, service_id_t, instance_id_t, bool, void*)> AvailabilityHandler_t;
 typedef std::function<bool (client_id_t, bool) > SubsciptionHandler_t;
 
 class Message;

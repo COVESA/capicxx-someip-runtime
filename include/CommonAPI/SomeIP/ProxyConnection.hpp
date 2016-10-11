@@ -50,10 +50,6 @@ class ProxyConnection {
         virtual void onError(const uint16_t, const uint32_t) {};
     };
 
-    typedef std::tuple< service_id_t, instance_id_t, eventgroup_id_t, event_id_t > EventHandlerIds;
-    typedef std::unordered_multimap< EventHandlerIds, EventHandler * > EventHandlerTable;
-    typedef EventHandlerIds EventHandlerToken;
-
     typedef Event< AvailabilityStatus > ConnectionStatusEvent;
 
     virtual ~ProxyConnection() {}
@@ -87,7 +83,7 @@ class ProxyConnection {
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             major_version_t major,
             bool isField,
             bool isSelective = false) = 0;
@@ -97,7 +93,7 @@ class ProxyConnection {
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             major_version_t major,
             minor_version_t minor) = 0;
 
@@ -106,14 +102,15 @@ class ProxyConnection {
                  instance_id_t instanceId,
                  eventgroup_id_t eventGroupId,
                  event_id_t eventId,
-                 ProxyConnection::EventHandler* eventHandler,
+                 std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
                  uint32_t _tag,
                  major_version_t major) = 0;
 
     virtual bool isAvailable(const Address &_address) = 0;
 
     virtual AvailabilityHandlerId_t registerAvailabilityHandler(
-            const Address &_address, AvailabilityHandler_t _handler) = 0;
+            const Address &_address, AvailabilityHandler_t _handler,
+            std::weak_ptr<Proxy> _proxy, void* _data) = 0;
     virtual void unregisterAvailabilityHandler(
             const Address &_address, AvailabilityHandlerId_t _handlerId) = 0;
 

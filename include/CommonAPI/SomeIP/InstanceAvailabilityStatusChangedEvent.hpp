@@ -32,9 +32,11 @@ public:
     COMMONAPI_EXPORT virtual ~InstanceAvailabilityStatusChangedEvent();
 
     COMMONAPI_EXPORT virtual void onEventMessage(const Message& _message);
-    COMMONAPI_EXPORT void onServiceInstanceStatus(service_id_t _serviceId,
-                                 instance_id_t _instanceId,
-                                 bool _isAvailable);
+    COMMONAPI_EXPORT static void onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
+                                                         service_id_t _serviceId,
+                                                         instance_id_t _instanceId,
+                                                         bool _isAvailable,
+                                                         void* _data);
     COMMONAPI_EXPORT void getAvailableInstances(std::vector<std::string> *_instances);
     COMMONAPI_EXPORT void getInstanceAvailabilityStatus(const std::string &_instanceAddress,
                                        CommonAPI::AvailabilityStatus *_availablityStatus);

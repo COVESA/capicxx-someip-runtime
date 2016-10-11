@@ -69,14 +69,18 @@ public:
             eventgroup_id_t eventGroupId, event_id_t eventId,
             major_version_t major);
 
-    COMMONAPI_EXPORT virtual void notifySpecificListener(std::weak_ptr<Proxy> _proxy,
+    COMMONAPI_EXPORT static void notifySpecificListener(std::weak_ptr<Proxy> _proxy,
                                                          const ProxyStatusEvent::Listener &_listener,
                                                          const ProxyStatusEvent::Subscription _subscription);
 
 private:
     COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
 
-    COMMONAPI_EXPORT void onServiceInstanceStatus(uint16_t serviceId, uint16_t instanceId, bool isAvailbale);
+    COMMONAPI_EXPORT static void onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
+                                                         uint16_t serviceId,
+                                                         uint16_t instanceId,
+                                                         bool isAvailbale,
+                                                         void* _data);
 
     COMMONAPI_EXPORT void availabilityTimeoutThreadHandler() const;
 
@@ -105,8 +109,6 @@ private:
                 std::promise<AvailabilityStatus>
                 > AvailabilityTimeout_t;
     mutable std::list<AvailabilityTimeout_t> timeouts_;
-
-    std::weak_ptr<Proxy> selfReference_;
 };
 
 } // namespace SomeIP

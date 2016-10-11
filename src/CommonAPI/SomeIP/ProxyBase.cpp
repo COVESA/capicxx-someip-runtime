@@ -24,7 +24,7 @@ void ProxyBase::addEventHandler(
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
         bool isField,
-        ProxyConnection::EventHandler* eventHandler,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
         major_version_t major,
         bool _isSelective) {
 
@@ -42,7 +42,7 @@ void ProxyBase::removeEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        ProxyConnection::EventHandler* eventHandler,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
         major_version_t major,
         minor_version_t minor) {
     bool found(false);
@@ -64,7 +64,7 @@ void ProxyBase::subscribeForSelective(
              instance_id_t instanceId,
              eventgroup_id_t eventGroupId,
              event_id_t eventId,
-             ProxyConnection::EventHandler* eventHandler,
+             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
              uint32_t _tag,
              major_version_t major) {
     connection_->subscribeForSelective(serviceId, instanceId, eventGroupId, eventId, eventHandler, _tag, major);
@@ -74,7 +74,7 @@ void ProxyBase::subscribeForSelective(
              service_id_t serviceId,
              instance_id_t instanceId,
              eventgroup_id_t eventGroupId,
-             ProxyConnection::EventHandler* eventHandler,
+             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
              uint32_t _tag,
              major_version_t major) {
     connection_->subscribeForSelective(serviceId, instanceId, eventGroupId, vsomeip::ANY_EVENT, eventHandler, _tag, major);

@@ -72,7 +72,7 @@ struct AvblQueueEntry : QueueEntry {
 
 struct ErrQueueEntry : QueueEntry {
 
-    ErrQueueEntry(ProxyConnection::EventHandler* _eventHandler,
+    ErrQueueEntry(std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
                   uint16_t _errorCode, uint32_t _tag,
                   service_id_t _service, instance_id_t _instance,
                   eventgroup_id_t _eventGroup) :
@@ -84,7 +84,7 @@ struct ErrQueueEntry : QueueEntry {
                       eventGroup_(_eventGroup) {}
     virtual ~ErrQueueEntry() {}
 
-    ProxyConnection::EventHandler* eventHandler_;
+    std::weak_ptr<ProxyConnection::EventHandler> eventHandler_;
     uint16_t errorCode_;
     uint32_t tag_;
     service_id_t service_;
@@ -145,23 +145,24 @@ public:
 
     void addEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler, major_version_t major,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler, major_version_t major,
             bool isField, bool isSelective);
 
     void removeEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler,  major_version_t major, minor_version_t minor);
+            std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,  major_version_t major, minor_version_t minor);
 
     void subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler, uint32_t _tag, major_version_t major);
+            std::weak_ptr<ProxyConnection::EventHandler> _eventHandler, uint32_t _tag, major_version_t major);
 
     virtual bool attachMainLoopContext(std::weak_ptr<MainLoopContext>);
 
     virtual bool isAvailable(const Address &_address);
 
     virtual AvailabilityHandlerId_t registerAvailabilityHandler(
-            const Address &_address, AvailabilityHandler_t _handler);
+            const Address &_address, AvailabilityHandler_t _handler,
+            std::weak_ptr<Proxy> _proxy, void* _data);
     virtual void unregisterAvailabilityHandler(const Address &_address,
             AvailabilityHandlerId_t _handlerId);
 
@@ -234,7 +235,7 @@ private:
     void cleanup();
 
     void eventInitialValueCallback(const CallStatus callStatus,
-                const Message& message, EventHandler *_eventHandler,
+                const Message& message, std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
                 const uint32_t tag);
 
     void addSelectiveErrorListener(service_id_t serviceId,
@@ -280,7 +281,8 @@ private:
     typedef std::map<service_id_t,
             std::map<instance_id_t,
                     std::map<event_id_t,
-                            std::set<ProxyConnection::EventHandler*>>>> events_map_t;
+                            std::map<ProxyConnection::EventHandler*,
+                                std::weak_ptr<ProxyConnection::EventHandler>>>>> events_map_t;
     mutable events_map_t eventHandlers_;
 
     typedef std::map<service_id_t,
@@ -293,7 +295,9 @@ private:
     mutable std::mutex availabilityMutex_;
     typedef std::map<service_id_t,
             std::map<instance_id_t,
-                    std::map<AvailabilityHandlerId_t, AvailabilityHandler_t> > > availability_map_t;
+                    std::map<AvailabilityHandlerId_t, std::tuple<AvailabilityHandler_t,
+                                                          std::weak_ptr<Proxy>,
+                                                          void*>> > > availability_map_t;
     availability_map_t availabilityHandlers_;
 
     typedef std::map<service_id_t,
@@ -301,7 +305,7 @@ private:
                     std::map<event_id_t, std::set<eventgroup_id_t> > > > subscriptions_map_t;
     subscriptions_map_t subscriptions_;
 
-    typedef std::tuple<Message, ProxyConnection::EventHandler*, uint32_t> inital_event_tuple_t;
+    typedef std::tuple<Message, std::weak_ptr<ProxyConnection::EventHandler>, uint32_t> inital_event_tuple_t;
     std::map<service_id_t,
                 std::map<instance_id_t, std::vector<inital_event_tuple_t> > > inital_event_requests;
 
@@ -311,12 +315,13 @@ private:
     std::map<service_id_t,
         std::map<instance_id_t,
             std::map<eventgroup_id_t,
-                std::queue<std::pair<ProxyConnection::EventHandler*, std::set<uint32_t>>>>>> selectiveErrorHandlers_;
+                std::queue<std::pair<std::weak_ptr<ProxyConnection::EventHandler>, std::set<uint32_t>>>>>> selectiveErrorHandlers_;
 
     std::map<service_id_t,
         std::map<instance_id_t,
             std::map<eventgroup_id_t,
-                std::map<ProxyConnection::EventHandler*, std::set<uint32_t>>>>> pendingSelectiveErrorHandlers_;
+                std::map<ProxyConnection::EventHandler* ,
+                    std::pair<std::weak_ptr<ProxyConnection::EventHandler>, std::set<uint32_t>>>>>> pendingSelectiveErrorHandlers_;
 };
 
 

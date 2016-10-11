@@ -34,29 +34,34 @@ InstanceAvailabilityStatusChangedEvent::onEventMessage(const Message &) {
 
 void
 InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus(
+        std::shared_ptr<Proxy> _proxy,
         service_id_t _serviceId,
         instance_id_t _instanceId,
-        bool _isAvailable) {
+        bool _isAvailable,
+        void* _data) {
+    (void)_proxy;
+    InstanceAvailabilityStatusChangedEvent* itsSelf =
+            static_cast<InstanceAvailabilityStatusChangedEvent*>(_data);
     if(_instanceId != vsomeip::ANY_INSTANCE) {
         Address service(_serviceId, _instanceId);
         CommonAPI::Address capiAddressNewService;
         AddressTranslator::get()->translate(service, capiAddressNewService);
-        if(capiAddressNewService.getInterface() == observedInterfaceName_) {
-            auto itsProxy = proxy_.shared_from_this();
+
+        if(capiAddressNewService.getInterface() == itsSelf->observedInterfaceName_) {
             if(_isAvailable) {
-                if (addInstance(capiAddressNewService, _instanceId)) {
-                    notifyListeners(capiAddressNewService.getAddress(),
+                if (itsSelf->addInstance(capiAddressNewService, _instanceId)) {
+                    itsSelf->notifyListeners(capiAddressNewService.getAddress(),
                             CommonAPI::AvailabilityStatus::AVAILABLE);
                 }
             } else {
-                if (removeInstance(capiAddressNewService, _instanceId)) {
-                    notifyListeners(capiAddressNewService.getAddress(),
+                if (itsSelf->removeInstance(capiAddressNewService, _instanceId)) {
+                    itsSelf->notifyListeners(capiAddressNewService.getAddress(),
                             CommonAPI::AvailabilityStatus::NOT_AVAILABLE);
-                }
+               }
             }
         } else {
             COMMONAPI_ERROR(
-                    observedInterfaceName_ + " doesn't match "
+                    itsSelf->observedInterfaceName_ + " doesn't match "
                             + capiAddressNewService.getInterface());
         }
     }
@@ -85,15 +90,10 @@ void
 InstanceAvailabilityStatusChangedEvent::onFirstListenerAdded(
         const Listener &_listener) {
     (void)_listener;
-    std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
-            std::bind(
-                    &InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus,
-                    this, std::placeholders::_1, std::placeholders::_2,
-                    std::placeholders::_3);
     Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
-
+    std::weak_ptr<Proxy> itsProxy = proxy_.shared_from_this();
     availabilityHandlerId_ = proxy_.getConnection()->registerAvailabilityHandler(
-                                wildcardAddress, availabilityHandler);
+                                wildcardAddress, onServiceInstanceStatus, itsProxy, this);
 }
 
 void

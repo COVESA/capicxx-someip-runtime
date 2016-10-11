@@ -49,7 +49,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
             bool isField,
-            ProxyConnection::EventHandler* eventHandler,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             major_version_t major,
             bool isSelective = false);
 
@@ -58,7 +58,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             major_version_t major,
             minor_version_t minor);
 
@@ -74,7 +74,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
              instance_id_t instanceId,
              eventgroup_id_t eventGroupId,
              event_id_t eventId,
-             ProxyConnection::EventHandler* eventHandler,
+             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
              uint32_t _tag,
              major_version_t major);
 
@@ -82,7 +82,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
              service_id_t serviceId,
              instance_id_t instanceId,
              eventgroup_id_t eventGroupId,
-             ProxyConnection::EventHandler* eventHandler,
+             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
              uint32_t _tag,
              major_version_t major);
 
