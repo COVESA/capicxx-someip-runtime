@@ -47,7 +47,7 @@ protected:
         (void) _listener;
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         this->proxy_.subscribeForSelective(this->serviceId_, this->instanceId_,
-                this->eventgroupId_, this, _subscription, major);
+                this->eventgroupId_, this->eventId_, this, _subscription, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {

@@ -16,27 +16,12 @@ ProxyManager::ProxyManager(Proxy &_proxy, const std::string &_interfaceName,
     instanceAvailabilityStatusEvent_(
             std::make_shared<
                     CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent>(
-                    _interfaceName)),
-    availabilityHandlerId_(0),
-    observedInterfaceServiceId_(_serviceId) {
-
-    std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
-            std::bind(
-                    &CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus,
-                    instanceAvailabilityStatusEvent_, std::placeholders::_1, std::placeholders::_2,
-                    std::placeholders::_3);
-    Address wildcardAddress(_serviceId, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
-
-    availabilityHandlerId_ = proxy_.getConnection()->registerAvailabilityHandler(
-                                wildcardAddress, availabilityHandler);
+                     _proxy,
+                     _interfaceName,
+                     _serviceId)) {
 }
 
-ProxyManager::~ProxyManager() {
-    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE,  vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
-
-    proxy_.getConnection()->unregisterAvailabilityHandler(
-            wildcardAddress, availabilityHandlerId_);
-}
+ProxyManager::~ProxyManager() { }
 
 const std::string &
 ProxyManager::getDomain() const {
@@ -66,22 +51,28 @@ ProxyManager::getAvailableInstances(CommonAPI::CallStatus &_callStatus,
 std::future<CallStatus>
 ProxyManager::getAvailableInstancesAsync(
         CommonAPI::ProxyManager::GetAvailableInstancesCallback _callback) {
-    std::thread t([this, _callback](){
-        std::vector<std::string> instances;
-        instanceAvailabilityStatusEvent_->getAvailableInstances(&instances);
-        _callback(CommonAPI::CallStatus::SUCCESS, instances);
-    });
-    t.detach();
-    std::promise<CallStatus> promise;
-    promise.set_value(CallStatus::SUCCESS);
-    return promise.get_future();
+
+     std::function<void(std::shared_ptr<Proxy>,
+             CommonAPI::ProxyManager::GetAvailableInstancesCallback)>
+     getAvailableInstancesAsyncHandler = [this] (std::shared_ptr<Proxy> _proxy,
+             CommonAPI::ProxyManager::GetAvailableInstancesCallback _callback) {
+         (void)_proxy;
+         std::vector<std::string> instances;
+         instanceAvailabilityStatusEvent_->getAvailableInstances(&instances);
+         _callback(CommonAPI::CallStatus::SUCCESS, instances);
+     };
+     proxy_.getConnection()->proxyPushFunctionToMainLoop<Connection>(getAvailableInstancesAsyncHandler, proxy_.shared_from_this(), _callback);
+
+     std::promise<CallStatus> promise;
+     promise.set_value(CallStatus::SUCCESS);
+     return promise.get_future();
 }
 
 void
-ProxyManager::getInstanceAvailabilityStatus(const std::string &_instanceAddress,
+ProxyManager::getInstanceAvailabilityStatus(const std::string &_instance,
                                             CallStatus &_callStatus,
                                             AvailabilityStatus &_availabilityStatus) {
-    CommonAPI::Address itsAddress("local", interfaceId_, _instanceAddress);
+    CommonAPI::Address itsAddress("local", interfaceId_, _instance);
     instanceAvailabilityStatusEvent_->getInstanceAvailabilityStatus(
             itsAddress.getAddress(), &_availabilityStatus);
     _callStatus = CommonAPI::CallStatus::SUCCESS;
@@ -89,17 +80,25 @@ ProxyManager::getInstanceAvailabilityStatus(const std::string &_instanceAddress,
 
 std::future<CallStatus>
 ProxyManager::getInstanceAvailabilityStatusAsync(
-        const std::string &_instanceAddress,
+        const std::string &_instance,
         CommonAPI::ProxyManager::GetInstanceAvailabilityStatusCallback _callback) {
-    std::thread t([this, _instanceAddress, _callback](){
-        CommonAPI::Address itsAddress("local", interfaceId_, _instanceAddress);
-        std::vector<std::string> instances;
+
+    std::function<void(std::shared_ptr<Proxy>,
+            CommonAPI::ProxyManager::GetInstanceAvailabilityStatusCallback,
+            const std::string)> getInstanceAvailabilityStatusAsyncHandler =
+                    [this] (std::shared_ptr<Proxy> _proxy,
+                            CommonAPI::ProxyManager::GetInstanceAvailabilityStatusCallback _callback,
+                            const std::string _instance) {
+
+        (void)_proxy;
+        CommonAPI::Address itsAddress("local", interfaceId_, _instance);
         CommonAPI::AvailabilityStatus availablityStatus;
         instanceAvailabilityStatusEvent_->getInstanceAvailabilityStatus(
                 itsAddress.getAddress(), &availablityStatus);
         _callback(CommonAPI::CallStatus::SUCCESS, availablityStatus);
-    });
-    t.detach();
+    };
+    proxy_.getConnection()->proxyPushFunctionToMainLoop<Connection>(getInstanceAvailabilityStatusAsyncHandler, proxy_.shared_from_this(), _callback, _instance);
+
     std::promise<CallStatus> promise;
     promise.set_value(CallStatus::SUCCESS);
     return promise.get_future();

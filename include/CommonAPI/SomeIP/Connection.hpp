@@ -25,6 +25,89 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+class Connection;
+
+enum class commDirectionType : uint8_t {
+    PROXYRECEIVE = 0x00,
+    STUBRECEIVE = 0x01,
+};
+
+struct QueueEntry {
+
+    QueueEntry() { }
+    virtual ~QueueEntry() { }
+
+    virtual void process(std::shared_ptr<Connection> _connection) = 0;
+};
+
+struct MsgQueueEntry : QueueEntry {
+
+    MsgQueueEntry(std::shared_ptr<vsomeip::message> _message,
+                  commDirectionType _directionType) :
+                      message_(_message),
+                      directionType_(_directionType) { }
+
+    std::shared_ptr<vsomeip::message> message_;
+    commDirectionType directionType_;
+
+    void process(std::shared_ptr<Connection> _connection);
+};
+
+struct AvblQueueEntry : QueueEntry {
+
+    AvblQueueEntry(service_id_t _service,
+                   instance_id_t _instance,
+                   bool _isAvailable) :
+                       service_(_service),
+                       instance_(_instance),
+                       isAvailable_(_isAvailable) { }
+
+    service_id_t service_;
+    instance_id_t instance_;
+
+    bool isAvailable_;
+
+    void process(std::shared_ptr<Connection> _connection);
+};
+
+struct ErrQueueEntry : QueueEntry {
+
+    ErrQueueEntry(ProxyConnection::EventHandler* _eventHandler,
+                  uint16_t _errorCode, uint32_t _tag,
+                  service_id_t _service, instance_id_t _instance,
+                  eventgroup_id_t _eventGroup) :
+                      eventHandler_(_eventHandler),
+                      errorCode_(_errorCode),
+                      tag_(_tag),
+                      service_(_service),
+                      instance_(_instance),
+                      eventGroup_(_eventGroup) {}
+    virtual ~ErrQueueEntry() {}
+
+    ProxyConnection::EventHandler* eventHandler_;
+    uint16_t errorCode_;
+    uint32_t tag_;
+    service_id_t service_;
+    instance_id_t instance_;
+    eventgroup_id_t eventGroup_;
+
+    void process(std::shared_ptr<Connection> _connection);
+};
+
+template<class Function, class... Arguments>
+struct FunctionQueueEntry : QueueEntry {
+
+    using bindType = decltype(std::bind(std::declval<Function>(),std::declval<Arguments>()...));
+
+    FunctionQueueEntry(Function&& _function,
+                       Arguments&& ... _args):
+                           bind_(std::forward<Function>(_function), std::forward<Arguments>(_args)...) { }
+
+    bindType bind_;
+
+    void process(std::shared_ptr<Connection> _connection);
+};
+
 class Connection:
         public ProxyConnection,
         public std::enable_shared_from_this<Connection> {
@@ -46,7 +129,7 @@ public:
     virtual bool sendMessage(const Message& message, uint32_t* allocatedSerial =
     NULL) const;
 
-    virtual std::future<CallStatus> sendMessageWithReplyAsync(
+    virtual bool sendMessageWithReplyAsync(
             const Message& message,
             std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler,
             const CommonAPI::CallInfo *_info) const;
@@ -70,8 +153,8 @@ public:
             ProxyConnection::EventHandler* eventHandler,  major_version_t major, minor_version_t minor);
 
     void subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
-            eventgroup_id_t eventGroupId, ProxyConnection::EventHandler* eventHandler,
-			uint32_t _tag, major_version_t major);
+            eventgroup_id_t eventGroupId, event_id_t eventId,
+            ProxyConnection::EventHandler* eventHandler, uint32_t _tag, major_version_t major);
 
     virtual bool attachMainLoopContext(std::weak_ptr<MainLoopContext>);
 
@@ -109,9 +192,12 @@ public:
     virtual void setStubMessageHandler(MessageHandler_t stubMessageHandler);
     virtual bool isStubMessageHandlerSet();
 
-    virtual void processMsgQueueEntry(Watch::MsgQueueEntry &_msgQueueEntry);
-    virtual void processAvblQueueEntry(Watch::AvblQueueEntry &_avblQueueEntry);
-    virtual void processFunctionQueueEntry(Watch::FunctionQueueEntry &_functionQueueEntry);
+    virtual void processMsgQueueEntry(MsgQueueEntry &_msgQueueEntry);
+    virtual void processAvblQueueEntry(AvblQueueEntry &_avblQueueEntry);
+	virtual void processErrQueueEntry(ErrQueueEntry &_errQueueEntry);
+
+	template<class Function, class... Arguments>
+    void processFunctionQueueEntry(FunctionQueueEntry<Function, Arguments ...> &_functionQueueEntry);
 
     virtual const ConnectionId_t& getConnectionId();
 
@@ -127,15 +213,17 @@ public:
     virtual void incrementConnection();
     virtual void decrementConnection();
 
-    virtual void proxyPushMessage(const Message &_message,
+    virtual void proxyPushMessageToMainLoop(const Message &_message,
                                   std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler);
 
-    virtual void proxyPushFunction(std::function<void(const uint32_t)> _function, uint32_t _value);
+    template<class Function, class... Arguments>
+    void proxyPushFunctionToMainLoop(Function&& _function, Arguments&& ... _args);
+
+    virtual void getAvailableInstances(service_id_t _serviceId, std::vector<std::string> *_instances);
 
 private:
-    void proxyReceive(const std::shared_ptr<vsomeip::message> &_message);
+    void receive(const std::shared_ptr<vsomeip::message> &_message);
     void handleProxyReceive(const std::shared_ptr<vsomeip::message> &_message);
-    void stubReceive(const std::shared_ptr<vsomeip::message> &_message);
     void handleStubReceive(const std::shared_ptr<vsomeip::message> &_message);
     void onConnectionEvent(state_type_e _state);
     void onAvailabilityChange(service_id_t _service, instance_id_t _instance,
@@ -153,7 +241,7 @@ private:
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId);
 
-    std::thread* dispatchThread_;
+    std::shared_ptr<std::thread> dispatchThread_;
 
     std::weak_ptr<MainLoopContext> mainLoopContext_;
     DispatchSource* dispatchSource_;
@@ -180,10 +268,10 @@ private:
     mutable std::condition_variable cleanupCondition_;
     bool cleanupCancelled_;
 
-    mutable std::mutex sendReceiveMutex_;
+    mutable std::recursive_mutex sendReceiveMutex_;
     typedef std::map<session_id_t,
             std::tuple<
-                    std::chrono::time_point<std::chrono::high_resolution_clock>,
+                    std::chrono::steady_clock::time_point,
                     std::shared_ptr<vsomeip::message>,
                     std::unique_ptr<MessageReplyAsyncHandler> > > async_answers_map_t;
     mutable async_answers_map_t asyncAnswers_;
@@ -194,6 +282,13 @@ private:
                     std::map<event_id_t,
                             std::set<ProxyConnection::EventHandler*>>>> events_map_t;
     mutable events_map_t eventHandlers_;
+
+    typedef std::map<service_id_t,
+            std::map<instance_id_t,
+                    std::map<eventgroup_id_t, uint32_t>>> subscription_counter_map_t;
+
+    mutable subscription_counter_map_t subscriptionCounters_;
+
 
     mutable std::mutex availabilityMutex_;
     typedef std::map<service_id_t,
@@ -223,6 +318,30 @@ private:
             std::map<eventgroup_id_t,
                 std::map<ProxyConnection::EventHandler*, std::set<uint32_t>>>>> pendingSelectiveErrorHandlers_;
 };
+
+
+template<class Function, class... Arguments>
+void FunctionQueueEntry<Function, Arguments ...>::process(std::shared_ptr<Connection> _connection) {
+    _connection->processFunctionQueueEntry(*this);
+}
+
+template<class Function, class... Arguments>
+void Connection::processFunctionQueueEntry(FunctionQueueEntry<Function, Arguments ...> &_functionQueueEntry) {
+    _functionQueueEntry.bind_();
+}
+
+template<class Function, class... Arguments>
+void Connection::proxyPushFunctionToMainLoop(Function&& _function, Arguments&& ... _args) {
+    if (auto lockedContext = mainLoopContext_.lock()) {
+        std::shared_ptr<FunctionQueueEntry<Function, Arguments ...>> functionQueueEntry = std::make_shared<FunctionQueueEntry<Function, Arguments ...>>(
+                std::forward<Function>(_function), std::forward<Arguments>(_args) ...);
+        watch_->pushQueue(functionQueueEntry);
+    }
+    else {
+        std::thread t(std::forward<Function>(_function), std::forward<Arguments>(_args) ...);
+        t.detach();
+    }
+}
 
 } // namespace SomeIP
 } // namespace CommonAPI

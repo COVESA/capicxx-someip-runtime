@@ -8,6 +8,7 @@
 #include <CommonAPI/Utils.hpp>
 #include <CommonAPI/SomeIP/StubAdapter.hpp>
 #include <CommonAPI/SomeIP/Factory.hpp>
+#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -15,16 +16,16 @@ namespace SomeIP {
 StubAdapter::StubAdapter(const Address &_someipAddress,
                          const std::shared_ptr<ProxyConnection> &_connection)
     : someipAddress_(_someipAddress), connection_(_connection) {
-    Factory::get()->incrementConnection(getConnection());
 }
 
 StubAdapter::~StubAdapter() {
-    Factory::get()->decrementConnection(getConnection());
+    Factory::get()->unregisterStub(address_.getDomain(), address_.getInterface(), address_.getInstance());
 }
 
 void
 StubAdapter::init(std::shared_ptr<StubAdapter> instance) {
     (void) instance;
+    AddressTranslator::get()->translate(someipAddress_, address_);
 }
 
 void

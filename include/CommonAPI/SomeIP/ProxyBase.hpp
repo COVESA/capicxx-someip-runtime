@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <mutex>
 
 #include <CommonAPI/Export.hpp>
 #include <CommonAPI/Proxy.hpp>
@@ -72,12 +73,20 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
              service_id_t serviceId,
              instance_id_t instanceId,
              eventgroup_id_t eventGroupId,
+             event_id_t eventId,
+             ProxyConnection::EventHandler* eventHandler,
+             uint32_t _tag,
+             major_version_t major);
+
+    COMMONAPI_EXPORT void subscribeForSelective(
+             service_id_t serviceId,
+             instance_id_t instanceId,
+             eventgroup_id_t eventGroupId,
              ProxyConnection::EventHandler* eventHandler,
              uint32_t _tag,
              major_version_t major);
 
     COMMONAPI_EXPORT virtual bool init() = 0;
-
  protected:
     const std::string commonApiDomain_;
 
@@ -87,6 +96,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
     std::shared_ptr<ProxyConnection> connection_;
 
     std::set<event_id_t> eventHandlerAdded_;
+    std::mutex eventHandlerAddedMutex_;
 };
 
 const std::shared_ptr< ProxyConnection >& ProxyBase::getConnection() const {

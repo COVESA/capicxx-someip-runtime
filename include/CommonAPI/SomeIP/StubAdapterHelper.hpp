@@ -30,48 +30,78 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-class StubDispatcherBase {
+template <typename StubClass_>
+class StubDispatcher {
 public:
-   virtual ~StubDispatcherBase() { }
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
+    virtual ~StubDispatcher() {}
+    virtual bool dispatchMessage(const Message &_message,
+                                 const std::shared_ptr<StubClass_> &_stub,
+                                 RemoteEventHandlerType* _remoteEventHandler,
+                                 std::shared_ptr<ProxyConnection> _connection) = 0;
 };
 
+template <typename StubClass_>
 struct AttributeDispatcherStruct {
-    StubDispatcherBase* getter;
-    StubDispatcherBase* setter;
+    StubDispatcher<StubClass_>* getter;
+    StubDispatcher<StubClass_>* setter;
 
-    AttributeDispatcherStruct(StubDispatcherBase* g, StubDispatcherBase* s) {
+    AttributeDispatcherStruct(StubDispatcher<StubClass_>* g, StubDispatcher<StubClass_>* s) {
         getter = g;
         setter = s;
     }
 };
 
-typedef std::unordered_map<std::string, AttributeDispatcherStruct> StubAttributeTable;
+template <typename T>
+struct identity { typedef T type; };
 
-template < typename StubClass_ >
-class StubAdapterHelper: public virtual StubAdapter {
+template <typename... Stubs_>
+class StubAdapterHelper {
+public:
+  StubAdapterHelper(const Address &_address,
+                    const std::shared_ptr< ProxyConnection > &_connection,
+                    const std::shared_ptr< StubBase> &_stub) :
+                        proxyConnection_(_connection) {
+      (void) _address;
+      (void) _stub;
+  }
+  template <typename RemoteEventHandlerType>
+  void setRemoteEventHandler(RemoteEventHandlerType * _remoteEventHandler) {
+    (void) _remoteEventHandler;
+  }
+protected:
+    bool findDispatcherAndHandle(const Message &message, const method_id_t &methodId) {
+      (void) message;
+      (void) methodId;
+      auto error = message.createErrorResponseMessage(return_code_e::E_UNKNOWN_METHOD);
+      proxyConnection_->sendMessage(error);
+      return false;
+    }
+
+    std::shared_ptr< ProxyConnection > proxyConnection_;
+};
+
+template <typename StubClass_, typename... Stubs_>
+class StubAdapterHelper<StubClass_, Stubs_...>:
+ public virtual StubAdapter,
+ public StubAdapterHelper<Stubs_...> {
  public:
     typedef typename StubClass_::StubAdapterType StubAdapterType;
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
 
-    class StubDispatcher: public StubDispatcherBase {
-     public:
-        virtual ~StubDispatcher() {}
-        virtual bool dispatchMessage(const Message &_message,
-                                     const std::shared_ptr<StubClass_> &_stub,
-                                     StubAdapterHelper<StubClass_> &_helper) = 0;
-    };
-
     // interfaceMemberName, interfaceMemberSignature
     typedef std::string InterfaceMemberPath;
-    typedef std::unordered_map<method_id_t, StubDispatcherBase *> StubDispatcherTable;
+    typedef std::unordered_map<method_id_t, StubDispatcher<StubClass_>*> StubDispatcherTable;
+    typedef std::unordered_map<std::string, AttributeDispatcherStruct<StubClass_>> StubAttributeTable;
 
  public:
     StubAdapterHelper(const Address &_address,
                       const std::shared_ptr< ProxyConnection > &_connection,
-                      const std::shared_ptr< StubClass_ > &_stub)
+                      const std::shared_ptr< StubBase > &_stub)
         : StubAdapter(_address, _connection),
-          stub_(_stub),
+          StubAdapterHelper<Stubs_...>(_address, _connection, _stub),
           remoteEventHandler_(nullptr) {
+        stub_ = std::dynamic_pointer_cast<StubClass_>(_stub);
     }
 
     virtual ~StubAdapterHelper() {
@@ -84,6 +114,12 @@ class StubAdapterHelper: public virtual StubAdapter {
         std::shared_ptr<StubAdapterType> stubAdapter
             = std::dynamic_pointer_cast<StubAdapterType>(instance);
         remoteEventHandler_ = stub_->initStubAdapter(stubAdapter);
+        StubAdapterHelper<Stubs_...>::setRemoteEventHandler(remoteEventHandler_);
+    }
+
+    void setRemoteEventHandler(RemoteEventHandlerType* _remoteEventHandler) {
+      remoteEventHandler_ = _remoteEventHandler;
+      StubAdapterHelper<Stubs_...>::setRemoteEventHandler(remoteEventHandler_);
     }
 
     virtual void deinit() {
@@ -99,29 +135,78 @@ class StubAdapterHelper: public virtual StubAdapter {
 
     virtual bool onInterfaceMessage(const Message &message) {
         const method_id_t methodId = message.getMethodId();
+        return findDispatcherAndHandle(message, methodId);
+    }
 
-        auto findIterator = getStubDispatcherTable().find(methodId);
-        const bool foundInterfaceMemberHandler = (findIterator != getStubDispatcherTable().end());
-        if (!foundInterfaceMemberHandler) {
-            auto error = message.createErrorResponseMessage(return_code_e::E_UNKNOWN_METHOD);
-            connection_->sendMessage(error);
-            return true;
-        }
+    bool findDispatcherAndHandle(const Message &message, const method_id_t &methodId) {
 
+        auto findIterator = stubDispatcherTable_.find(methodId);
+        const bool foundInterfaceMemberHandler = (findIterator != stubDispatcherTable_.end());
         bool isMessageHandled = false;
         //To prevent the destruction of the stub whilst still handling a message
         if (stub_ && foundInterfaceMemberHandler) {
-            StubDispatcher *stubDispatcher = static_cast< StubDispatcher * >(findIterator->second);
-            isMessageHandled = stubDispatcher->dispatchMessage(message, stub_, *this);
+            StubDispatcher<StubClass_> *stubDispatcher = findIterator->second;
+            isMessageHandled = stubDispatcher->dispatchMessage(message, stub_, getRemoteEventHandler(), getConnection());
+            if( !isMessageHandled) {
+                if (message.isRequestType()) {
+                    auto error = message.createErrorResponseMessage(return_code_e::E_MALFORMED_MESSAGE);
+                    connection_->sendMessage(error);
+                }
+            }
+            return isMessageHandled;
         }
-
-        return isMessageHandled;
+        return StubAdapterHelper<Stubs_...>::findDispatcherAndHandle(message, methodId);
     }
 
-    virtual const StubDispatcherTable& getStubDispatcherTable() = 0;
+    template <typename Stub_>
+    void addStubDispatcher(method_id_t methodId,
+                           StubDispatcher<Stub_>* _stubDispatcher) {
+        addStubDispatcher(methodId, _stubDispatcher, identity<Stub_>());
+    }
+
+    template <typename Stub_>
+    void addAttributeDispatcher(std::string _key,
+                                StubDispatcher<Stub_>* _stubDispatcherGetter,
+                                StubDispatcher<Stub_>* _stubDispatcherSetter) {
+        addAttributeDispatcher(_key, _stubDispatcherGetter, _stubDispatcherSetter, identity<Stub_>());
+    }
 
     std::shared_ptr<StubClass_> stub_;
     RemoteEventHandlerType *remoteEventHandler_;
+    StubDispatcherTable stubDispatcherTable_;
+    StubAttributeTable stubAttributeTable_;
+
+  private:
+    template <typename Stub_>
+    void addStubDispatcher(method_id_t methodId,
+                           StubDispatcher<Stub_>* _stubDispatcher,
+                           identity<Stub_>) {
+        StubAdapterHelper<Stubs_...>::addStubDispatcher(methodId, _stubDispatcher);
+
+    }
+
+    void addStubDispatcher(method_id_t methodId,
+                           StubDispatcher<StubClass_>* _stubDispatcher,
+                           identity<StubClass_>) {
+        stubDispatcherTable_.insert({methodId, _stubDispatcher});
+
+    }
+
+    template <typename Stub_>
+    void addAttributeDispatcher(std::string _key,
+                           StubDispatcher<Stub_>* _stubDispatcherGetter,
+                           StubDispatcher<Stub_>* _stubDispatcherSetter,
+                           identity<Stub_>) {
+        StubAdapterHelper<Stubs_...>::addAttributeDispatcher(_key, _stubDispatcherGetter, _stubDispatcherSetter);
+
+    }
+
+    void addAttributeDispatcher(std::string _key,
+                           StubDispatcher<StubClass_>* _stubDispatcherGetter,
+                           StubDispatcher<StubClass_>* _stubDispatcherSetter,
+                           identity<StubClass_>) {
+        stubAttributeTable_.insert({_key, {_stubDispatcherGetter, _stubDispatcherSetter}});
+    }
 };
 
 template <class>
@@ -191,9 +276,9 @@ template <
     template <class...> class In_, class... InArgs_,
     template <class...> class DeplIn_, class... DeplInArgs_>
 class MethodStubDispatcher<StubClass_, In_<InArgs_...>, DeplIn_<DeplInArgs_...>>
-    : public StubAdapterHelper<StubClass_>::StubDispatcher {
+    : public StubDispatcher <StubClass_>{
 public:
-    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_...);
 
     MethodStubDispatcher(
@@ -205,9 +290,10 @@ public:
 
     bool dispatchMessage(const Message &_message,
                          const std::shared_ptr<StubClass_> &_stub,
-                         StubAdapterHelperType &_adapterHelper) {
+                         RemoteEventHandlerType* _remoteEventHandler,
+                         std::shared_ptr<ProxyConnection> _connection) {
         return dispatchMessageHelper(
-                    _message, _stub, _adapterHelper,
+                    _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type());
     }
 
@@ -220,9 +306,11 @@ private:
     template <int... InArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                         const std::shared_ptr<StubClass_> &_stub,
-                                        StubAdapterHelperType &_adapterHelper,
+                                        RemoteEventHandlerType* _remoteEventHandler,
+                                        std::shared_ptr<ProxyConnection> _connection,
                                       index_sequence<InArgIndices_...>) {
-        (void)_adapterHelper;
+        (void)_remoteEventHandler;
+        (void)_connection;
 
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
@@ -259,9 +347,9 @@ template <
     template <class...> class DeplIn_, class... DeplInArgs_,
     template <class...> class DeplOut_, class... DeplOutArgs_>
 class MethodWithReplyStubDispatcher<StubClass_, In_<InArgs_...>, Out_<OutArgs_...>, DeplIn_<DeplInArgs_...>, DeplOut_<DeplOutArgs_...>>
-    : public StubAdapterHelper<StubClass_>::StubDispatcher {
+    : public StubDispatcher<StubClass_> {
 public:
-    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef std::function<void (OutArgs_...)> ReplyType_t;
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., ReplyType_t);
 
@@ -274,10 +362,11 @@ public:
 
     bool dispatchMessage(const Message &_message,
                          const std::shared_ptr<StubClass_> &_stub,
-                         StubAdapterHelperType &_adapterHelper) {
-        connection_ = _adapterHelper.getConnection();
+                         RemoteEventHandlerType* _remoteEventHandler,
+                         std::shared_ptr<ProxyConnection> _connection) {
+        connection_ = _connection;
         return dispatchMessageHelper(
-                    _message, _stub,
+                    _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
                     typename make_sequence_range<sizeof...(OutArgs_), 0>::type());
     }
@@ -296,8 +385,13 @@ private:
     template <int... InArgIndices_, int... OutArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                         const std::shared_ptr<StubClass_> &_stub,
+                                        RemoteEventHandlerType* _remoteEventHandler,
+                                        std::shared_ptr<ProxyConnection> _connection,
                                       index_sequence<InArgIndices_...>,
                                       index_sequence<OutArgIndices_...>) {
+        (void) _remoteEventHandler;
+        (void) _connection;
+
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
             connection_->sendMessage(error);
@@ -392,23 +486,27 @@ template <
     template <class...> class In_, class... InArgs_,
     template <class...> class Out_, class... OutArgs_>
 class MethodWithReplyAdapterDispatcher<StubClass_, StubAdapterClass_, In_<InArgs_...>, Out_<OutArgs_...>>
-    : public StubAdapterHelper<StubClass_>::StubDispatcher {
+    : public StubDispatcher<StubClass_> {
 
 public:
-    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef void (StubAdapterClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., OutArgs_&...);
-    typedef typename CommonAPI::Stub<typename StubAdapterHelperType::StubAdapterType, typename StubClass_::RemoteEventType> StubType;
+    typedef typename CommonAPI::Stub<typename StubClass_::StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
     MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor, bool _isLittleEndian)
         : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian) {
     }
 
-    bool dispatchMessage(const Message &_message, const std::shared_ptr<StubClass_> &_stub, StubAdapterHelperType &_adapterHelper) {
+    bool dispatchMessage(const Message &_message,
+      const std::shared_ptr<StubClass_> &_stub,
+      RemoteEventHandlerType* _remoteEventHandler,
+      std::shared_ptr<ProxyConnection> _connection) {
+
         std::tuple<InArgs_..., OutArgs_...> argTuple;
         return dispatchMessageHelper(
                         _message,
                         _stub,
-                        _adapterHelper,
+                        _remoteEventHandler, _connection,
                         typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
                         typename make_sequence_range<sizeof...(OutArgs_), sizeof...(InArgs_)>::type(),
                         argTuple);
@@ -419,16 +517,17 @@ public:
     inline bool dispatchMessageHelper(
                         const Message &_message,
                         const std::shared_ptr<StubClass_> &_stub,
-                        StubAdapterHelperType &_adapterHelper,
+                        RemoteEventHandlerType* _remoteEventHandler,
+                        std::shared_ptr<ProxyConnection> _connection,
                         index_sequence<InArgIndices_...>,
                         index_sequence<OutArgIndices_...>,
                         std::tuple<InArgs_..., OutArgs_...> _argTuple) const {
 
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
-            _adapterHelper.getConnection()->sendMessage(error);
+            _connection->sendMessage(error);
             return true;
-        } 
+        }
 
        if (sizeof...(InArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
@@ -450,7 +549,7 @@ public:
             outputStream.flush();
        }
 
-        return _adapterHelper.getConnection()->sendMessage(reply);
+        return _connection->sendMessage(reply);
     }
 
     StubFunctor_ stubFunctor_;
@@ -459,21 +558,26 @@ public:
 
 
 template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
-class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDispatcher {
+class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
  public:
-    typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
 
     GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
         : getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
-        return sendAttributeValueReply(message, stub, stubAdapterHelper);
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
+      RemoteEventHandlerType* _remoteEventHandler,
+      std::shared_ptr<ProxyConnection> _connection) {
+        (void) _remoteEventHandler;
+        return sendAttributeValueReply(message, stub, _connection);
     }
 
  protected:
-    inline bool sendAttributeValueReply(const Message &message, const std::shared_ptr<StubClass_>& stub, StubAdapterHelperType& stubAdapterHelper) {
+    inline bool sendAttributeValueReply(const Message &message, const std::shared_ptr<StubClass_>& stub,
+      std::shared_ptr<ProxyConnection> _connection) {
+
         Message reply = message.createResponseMessage();
         OutputStream outputStream(reply, isLittleEndian_);
 
@@ -482,7 +586,7 @@ class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDisp
         outputStream << CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
         outputStream.flush();
 
-        return stubAdapterHelper.getConnection()->sendMessage(reply);
+        return _connection->sendMessage(reply);
     }
 
     GetStubFunctor getStubFunctor_;
@@ -494,8 +598,7 @@ class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDisp
 template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
 class SetAttributeStubDispatcher: public GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_> {
 public:
-    typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::StubAdapterHelperType StubAdapterHelperType;
-    typedef typename StubAdapterHelperType::RemoteEventHandlerType RemoteEventHandlerType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
 
     typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
     typedef bool (RemoteEventHandlerType::*OnRemoteSetFunctor)(std::shared_ptr<CommonAPI::ClientId>, AttributeType_);
@@ -511,15 +614,17 @@ public:
           onRemoteChangedFunctor_(onRemoteChangedFunctor) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
+      RemoteEventHandlerType* _remoteEventHandler,
+      std::shared_ptr<ProxyConnection> _connection) {
         bool attributeValueChanged;
 
-        if (!setAttributeValue(message, stub, stubAdapterHelper, attributeValueChanged)) {
+        if (!setAttributeValue(message, stub, _remoteEventHandler, _connection, attributeValueChanged)) {
             return false;
         }
 
         if (attributeValueChanged) {
-            notifyOnRemoteChanged(stubAdapterHelper);
+            notifyOnRemoteChanged( _remoteEventHandler);
         }
 
         return true;
@@ -528,7 +633,8 @@ public:
  protected:
     inline bool setAttributeValue(const Message &message,
                                   const std::shared_ptr<StubClass_>& stub,
-                                  StubAdapterHelperType& stubAdapterHelper,
+                                  RemoteEventHandlerType* _remoteEventHandler,
+                                  std::shared_ptr<ProxyConnection> _connection,
                                   bool& attributeValueChanged) {
         InputStream inputStream(message, this->isLittleEndian_);
         CommonAPI::Deployable<AttributeType_, AttributeDepl_> attributeValue(this->depl_);
@@ -539,13 +645,13 @@ public:
 
         std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
 
-        attributeValueChanged = (stubAdapterHelper.getRemoteEventHandler()->*onRemoteSetFunctor_)(clientId, std::move(attributeValue.getValue()));
+        attributeValueChanged = (_remoteEventHandler->*onRemoteSetFunctor_)(clientId, std::move(attributeValue.getValue()));
 
-        return this->sendAttributeValueReply(message, stub, stubAdapterHelper);
+        return this->sendAttributeValueReply(message, stub, _connection);
     }
 
-    inline void notifyOnRemoteChanged(StubAdapterHelperType& stubAdapterHelper) {
-        (stubAdapterHelper.getRemoteEventHandler()->*onRemoteChangedFunctor_)();
+    inline void notifyOnRemoteChanged(RemoteEventHandlerType* _remoteEventHandler) {
+        (_remoteEventHandler->*onRemoteChangedFunctor_)();
     }
 
     inline const AttributeType_& getAttributeValue(std::shared_ptr<CommonAPI::ClientId> clientId, const std::shared_ptr<StubClass_> &stub) {
@@ -560,8 +666,8 @@ public:
 template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
 class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_> {
  public:
-    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::StubAdapterHelperType StubAdapterHelperType;
-    typedef typename StubAdapterHelperType::StubAdapterType StubAdapterType;
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
+    typedef typename StubClass_::StubAdapterType StubAdapterType;
 
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteSetFunctor OnRemoteSetFunctor;
@@ -583,23 +689,24 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
                     fireChangedFunctor_(fireChangedFunctor) {
     }
 
-    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
+    bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
+      RemoteEventHandlerType* _remoteEventHandler,
+      std::shared_ptr<ProxyConnection> _connection) {
         bool attributeValueChanged;
-        if (!this->setAttributeValue(message, stub, stubAdapterHelper, attributeValueChanged)) {
+        if (!this->setAttributeValue(message, stub, _remoteEventHandler, _connection, attributeValueChanged)) {
             return false;
         }
 
         if (attributeValueChanged) {
             std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
-            fireAttributeValueChanged(clientId, stubAdapterHelper, stub);
-            this->notifyOnRemoteChanged(stubAdapterHelper);
+            fireAttributeValueChanged(clientId,  stub);
+            this->notifyOnRemoteChanged(_remoteEventHandler);
         }
         return true;
     }
 
  private:
-    inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> _client, StubAdapterHelperType &_helper, const std::shared_ptr<StubClass_> _stub) {
-        (void)_helper;
+    inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> _client, const std::shared_ptr<StubClass_> _stub) {
         (_stub->StubType::getStubAdapter().get()->*fireChangedFunctor_)(this->getAttributeValue(_client, _stub));
     }
 

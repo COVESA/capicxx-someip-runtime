@@ -174,17 +174,28 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                                 >::Delegate delegate(_proxy.shared_from_this(), _function);
         auto messageReplyAsyncHandler = ProxyAsyncCallbackHandler<
                                             Proxy, OutArgs_...
-                                        >::create(delegate, _isLittleEndian, std::move(_outArgs)).release();
+                                        >::create(delegate, _isLittleEndian, std::move(_outArgs));
+
+        std::future< CallStatus > callStatusFuture;
+        try {
+            callStatusFuture = messageReplyAsyncHandler->getFuture();
+        } catch (std::exception& e) {
+            COMMONAPI_ERROR("MethodAsync(someip): messageReplyAsyncHandler future failed(", e.what(), ")");
+        }
 
         if (_proxy.isAvailable()) {
-            return _proxy.getConnection()->sendMessageWithReplyAsync(
+            _proxy.getConnection()->sendMessageWithReplyAsync(
                        _message,
-                       std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler),
+                       std::move(messageReplyAsyncHandler),
                        _info);
+            COMMONAPI_VERBOSE("MethodAsync(someip): Proxy available -> sendMessageWithReplyAsync");
+            return callStatusFuture;
         } else {
+            std::shared_ptr< std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > > sharedMessageReplyAsyncHandler(
+                    new std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler >(std::move(messageReplyAsyncHandler)));
             //async isAvailable call with timeout
-            _proxy.isAvailableAsync([&_proxy, _message, _info,
-                                     _outArgs, messageReplyAsyncHandler, _function](
+            COMMONAPI_VERBOSE("MethodAsync(someip): Proxy not available -> register calback");
+            _proxy.isAvailableAsync([&_proxy, _message, sharedMessageReplyAsyncHandler](
                                              const AvailabilityStatus _status,
                                              const Timeout_t remaining) {
                 if(_status == AvailabilityStatus::AVAILABLE) {
@@ -193,18 +204,28 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                     if(remaining < 100)
                         newTimeout = 100;
                     CallInfo newInfo(newTimeout);
+                    if(*sharedMessageReplyAsyncHandler) {
                     _proxy.getConnection()->sendMessageWithReplyAsync(
                         _message,
-                        std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler),
+                        std::move(*sharedMessageReplyAsyncHandler),
                         &newInfo);
+                    COMMONAPI_VERBOSE("MethodAsync(someip): Proxy callback available -> sendMessageWithReplyAsync");
+                    } else {
+                        COMMONAPI_ERROR("MethodAsync(someip): Proxy callback available but callback taken");
+                    }
                 } else {
                     //create error message and push it directly to the connection
-                    Message message = _message.createErrorResponseMessage(vsomeip::return_code_e::E_NOT_REACHABLE);
-                    _proxy.getConnection()->proxyPushMessage(message,
-                            std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler));
+                    if (*sharedMessageReplyAsyncHandler) {
+                        Message message = _message.createErrorResponseMessage(vsomeip::return_code_e::E_NOT_REACHABLE);
+                        _proxy.getConnection()->proxyPushMessageToMainLoop(message,
+                                std::move(*sharedMessageReplyAsyncHandler));
+                        COMMONAPI_VERBOSE("MethodAsync(someip): Proxy callback not reachable -> sendMessageWithReplyAsync");
+                    } else {
+                        COMMONAPI_ERROR("MethodAsync(someip): Proxy callback not reachable but callback taken");
+                    }
                 }
             }, _info);
-            return messageReplyAsyncHandler->getFuture();
+            return callStatusFuture;
         }
     }
 

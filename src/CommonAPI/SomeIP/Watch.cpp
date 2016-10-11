@@ -19,26 +19,6 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-void Watch::MsgQueueEntry::process() {
-    if(auto connection = watch_->connection_.lock())
-        connection->processMsgQueueEntry(*this);
-}
-
-void Watch::AvblQueueEntry::process() {
-    if(auto connection = watch_->connection_.lock())
-         connection->processAvblQueueEntry(*this);
-}
-
-void Watch::ErrQueueEntry::process() {
-    if(eventHandler_)
-        eventHandler_->onError(errorCode_, tag_);
-}
-
-void Watch::FunctionQueueEntry::process() {
-    if(auto connection = watch_->connection_.lock())
-         connection->processFunctionQueueEntry(*this);
-}
-
 Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
 #ifdef WIN32
     std::string pipeName = "\\\\.\\pipe\\CommonAPI-SomeIP-";
@@ -185,7 +165,7 @@ void Watch::removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSo
     }
 }
 
-void Watch::pushQueue(std::shared_ptr<Watch::QueueEntry> _queueEntry) {
+void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
     std::unique_lock<std::mutex> itsLock(queueMutex_);
     queue_.push(_queueEntry);
 
@@ -240,7 +220,7 @@ void Watch::popQueue() {
     queue_.pop();
 }
 
-std::shared_ptr<Watch::QueueEntry> Watch::frontQueue() {
+std::shared_ptr<QueueEntry> Watch::frontQueue() {
     std::unique_lock<std::mutex> itsLock(queueMutex_);
 
     return queue_.front();
@@ -253,7 +233,8 @@ bool Watch::emptyQueue() {
 }
 
 void Watch::processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry) {
-    _queueEntry->process();
+    if(auto connection = connection_.lock())
+        _queueEntry->process(connection);
 }
 
 } // namespace SomeIP

@@ -49,7 +49,7 @@ public:
      *
      * @param Message The #Message any data pushed into this stream should be written to.
      */
-    COMMONAPI_EXPORT OutputStream(Message message, bool _isLittleEndian);
+    COMMONAPI_EXPORT OutputStream(Message message, bool _isLittleEndian = false);
 
     /**
      * Destructor; does not call the destructor of the referred #Message. Make sure to maintain a reference to the
@@ -106,7 +106,28 @@ public:
      template<class Deployment_, typename Base_>
      COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<Base_> &_value, const Deployment_ *_depl) {
          if (_depl != nullptr) {
-             _writeBitValue(_value.value_, _depl->bits_, _depl->isSigned_);
+             uint8_t width = static_cast<uint8_t>(_depl ? (_depl->bits_ >> 3) : 0);
+             switch (width) {
+                 case 1:
+                 {
+                     uint8_t value = static_cast<uint8_t>(_value);
+                     _writeBitValue(value, _depl->bits_, _depl->isSigned_);
+                 }
+                 break;
+
+                 case 2:
+                 {
+                     uint16_t value = static_cast<uint16_t>(_value);
+                     _writeBitValue(value, _depl->bits_, _depl->isSigned_);
+                 }
+                 break;
+
+                 default:
+                 {
+                     _writeBitValue(_value.value_, _depl->bits_, _depl->isSigned_);
+                 }
+                 break;
+             }
          } else {
              writeValue(_value.value_, static_cast<EmptyDeployment *>(nullptr));
          }

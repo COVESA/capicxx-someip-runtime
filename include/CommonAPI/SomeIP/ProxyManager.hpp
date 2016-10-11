@@ -22,7 +22,6 @@
 #include <CommonAPI/SomeIP/Factory.hpp>
 #include <CommonAPI/SomeIP/InstanceAvailabilityStatusChangedEvent.hpp>
 
-
 namespace CommonAPI {
 namespace SomeIP {
 
@@ -41,12 +40,12 @@ public:
     COMMONAPI_EXPORT virtual void getAvailableInstances( CommonAPI::CallStatus &_callStatus, std::vector<std::string> &_instances);
     COMMONAPI_EXPORT virtual std::future<CallStatus> getAvailableInstancesAsync(GetAvailableInstancesCallback _callback);
 
-    COMMONAPI_EXPORT virtual void getInstanceAvailabilityStatus(const std::string &_instanceAddress,
+    COMMONAPI_EXPORT virtual void getInstanceAvailabilityStatus(const std::string &_instance,
                                                CallStatus &_callStatus,
                                                AvailabilityStatus &_availabilityStatus);
 
     COMMONAPI_EXPORT  virtual std::future<CallStatus> getInstanceAvailabilityStatusAsync(
-                                        const std::string &_instanceAddress,
+                                        const std::string &_instance,
                                         GetInstanceAvailabilityStatusCallback _callback);
 
     COMMONAPI_EXPORT virtual InstanceAvailabilityStatusChangedEvent& getInstanceAvailabilityStatusChangedEvent();
@@ -55,8 +54,6 @@ private:
     Proxy &proxy_;
     const std::string interfaceId_;
     std::shared_ptr<CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent> instanceAvailabilityStatusEvent_;
-    AvailabilityHandlerId_t availabilityHandlerId_;
-    service_id_t observedInterfaceServiceId_;
 };
 
 } // namespace SomeIP

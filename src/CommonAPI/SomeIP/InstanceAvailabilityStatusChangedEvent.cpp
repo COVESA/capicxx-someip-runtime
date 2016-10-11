@@ -12,11 +12,21 @@ namespace CommonAPI {
 namespace SomeIP {
 
 InstanceAvailabilityStatusChangedEvent::InstanceAvailabilityStatusChangedEvent(
-        const std::string &_interfaceName) :
-                observedInterfaceName_(_interfaceName) {
+        Proxy &_proxy,
+        const std::string &_interfaceName,
+        const service_id_t &_serviceId) :
+                proxy_(_proxy),
+                observedInterfaceName_(_interfaceName),
+                observedInterfaceServiceId_ (_serviceId),
+                availabilityHandlerId_(0) {
 }
 
-InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent() {}
+InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent() {
+    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE,  vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+
+    proxy_.getConnection()->unregisterAvailabilityHandler(
+            wildcardAddress, availabilityHandlerId_);
+}
 
 void
 InstanceAvailabilityStatusChangedEvent::onEventMessage(const Message &) {
@@ -32,6 +42,7 @@ InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus(
         CommonAPI::Address capiAddressNewService;
         AddressTranslator::get()->translate(service, capiAddressNewService);
         if(capiAddressNewService.getInterface() == observedInterfaceName_) {
+            auto itsProxy = proxy_.shared_from_this();
             if(_isAvailable) {
                 if (addInstance(capiAddressNewService, _instanceId)) {
                     notifyListeners(capiAddressNewService.getAddress(),
@@ -46,7 +57,7 @@ InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus(
         } else {
             COMMONAPI_ERROR(
                     observedInterfaceName_ + " doesn't match "
-                            + capiAddressNewService.getInterface())
+                            + capiAddressNewService.getInterface());
         }
     }
 }
@@ -54,21 +65,17 @@ InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus(
 void
 InstanceAvailabilityStatusChangedEvent::getAvailableInstances(
         std::vector<std::string> *_instances) {
-    std::lock_guard<std::mutex> lock(instancesMutex_);
-    _instances->clear();
-    for (const auto &instance : instancesForward_) {
-        _instances->push_back(instance.second);
-    }
+    proxy_.getConnection()->getAvailableInstances(observedInterfaceServiceId_, _instances);
 }
 
 void
 InstanceAvailabilityStatusChangedEvent::getInstanceAvailabilityStatus(
         const std::string &_instanceAddress,
         CommonAPI::AvailabilityStatus *_availablityStatus) {
-    std::lock_guard<std::mutex> lock(instancesMutex_);
     CommonAPI::Address capiAddress(_instanceAddress);
-    auto instance = instancesBackward_.find(capiAddress.getInstance());
-    if(instance != instancesBackward_.end())
+    Address address;
+    AddressTranslator::get()->translate(capiAddress, address);
+    if(proxy_.getConnection()->isAvailable(address))
         *_availablityStatus = CommonAPI::AvailabilityStatus::AVAILABLE;
     else
         *_availablityStatus = CommonAPI::AvailabilityStatus::NOT_AVAILABLE;
@@ -76,15 +83,23 @@ InstanceAvailabilityStatusChangedEvent::getInstanceAvailabilityStatus(
 
 void
 InstanceAvailabilityStatusChangedEvent::onFirstListenerAdded(
-        const Listener &) {
-    // Proxy Manager will add the availability handler
-    // As its needed anyways even if a user never subscribes on this event
+        const Listener &_listener) {
+    (void)_listener;
+    std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
+            std::bind(
+                    &InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus,
+                    this, std::placeholders::_1, std::placeholders::_2,
+                    std::placeholders::_3);
+    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+
+    availabilityHandlerId_ = proxy_.getConnection()->registerAvailabilityHandler(
+                                wildcardAddress, availabilityHandler);
 }
 
 void
 InstanceAvailabilityStatusChangedEvent::onLastListenerRemoved(
         const Listener &) {
-    // Proxy Manager will remove the availability handler
+    // Destruktor of InstanceAvailabilityStatusChangedEvent will remove the availability handler
     // As its needed anyways even if a user never subscribes on this event
 }
 

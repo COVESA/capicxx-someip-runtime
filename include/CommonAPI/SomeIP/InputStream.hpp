@@ -87,27 +87,43 @@ public:
         readValue(tmpValue, static_cast<EmptyDeployment *>(nullptr));
         _value = tmpValue;
 
-        if(!_value.validate()) {
-            errorOccurred_ = true;
-        }
-
         return (*this);
     }
 
     template<class Deployment_, typename Base_>
     COMMONAPI_EXPORT InputStream &readValue(Enumeration<Base_> &_value, const Deployment_ *_depl) {
         if (_depl != nullptr) {
-            errorOccurred_ = _readBitValue(_value.value_, _depl->bits_, _depl->isSigned_);
+            uint8_t width = static_cast<uint8_t>(_depl ? (_depl->bits_ >> 3) : 0);
+            switch (width) {
+                case 1:
+                {
+                    uint8_t value;
+                    errorOccurred_ = _readBitValue(value, _depl->bits_, _depl->isSigned_);
+                    _value.value_ = static_cast<Base_>(value);
+                    break;
+                }
+                case 2:
+                {
+                    uint16_t value;
+                    errorOccurred_ = _readBitValue(value, _depl->bits_, _depl->isSigned_);
+                    _value.value_ = static_cast<Base_>(value);
+                    break;
+                }
+                default:
+                {
+                    Base_ value;
+                    errorOccurred_ = _readBitValue(value, _depl->bits_, _depl->isSigned_);
+                    _value.value_ = value;
+                    break;
+                }
+            }
+
             if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
                 _value.value_ = _depl->invalid_;
                 errorOccurred_ = false;
             }
         } else {
             readValue(_value.value_, static_cast<EmptyDeployment *>(nullptr));
-        }
-
-        if (!_value.validate()) {
-            errorOccurred_ = true;
         }
 
         return (*this);
@@ -410,7 +426,7 @@ public:
      * Destructor; does not call the destructor of the referred #Message. Make sure to maintain a reference to the
      * #Message outside of the stream if you intend to make further use of the message.
      */
-    COMMONAPI_EXPORT ~InputStream();
+    COMMONAPI_EXPORT virtual ~InputStream();
 
     /**
      * Aligns the stream to the given byte boundary, i.e. the stream skips as many bytes as are necessary to execute the next read

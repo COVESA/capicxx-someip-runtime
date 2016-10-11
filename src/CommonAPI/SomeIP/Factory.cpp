@@ -45,7 +45,9 @@ Factory::init() {
 
 void
 Factory::registerInterface(InterfaceInitFunction _function) {
+#ifndef WIN32
 	std::lock_guard<std::mutex> itsLock(initializerMutex_);
+#endif
 	if (isInitialized_) {
 		// We are already running --> initialize the interface library!
 		_function();
@@ -59,7 +61,8 @@ void
 Factory::registerProxyCreateMethod(
     const std::string &_interface,
     ProxyCreateFunction _function) {
-    COMMONAPI_INFO("Registering function for creating \"", _interface, "\" proxy.");
+    COMMONAPI_INFO("Registering function for creating \"", _interface,
+            "\" proxy.");
     proxyCreateFunctions_[_interface] = _function;
 }
 
@@ -67,69 +70,86 @@ void
 Factory::registerStubAdapterCreateMethod(
     const std::string &_interface,
     StubAdapterCreateFunction _function) {
-    COMMONAPI_INFO("Registering function for creating \"", _interface, "\" stub adapter.");
+    COMMONAPI_INFO("Registering function for creating \"", _interface,
+            "\" stub adapter.");
     stubAdapterCreateFunctions_[_interface] = _function;
 }
 
 std::shared_ptr<CommonAPI::Proxy>
 Factory::createProxy(
-    const std::string &_domain, const std::string &_interface, const std::string &_instance,
+    const std::string &_domain,
+    const std::string &_interface, const std::string &_instance,
     const ConnectionId_t &_connectionId) {
 
-    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":", _instance, "\"");
+    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":",
+            _instance, "\"");
 
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
     if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
-            std::shared_ptr<Connection> itsConnection = getConnection(_connectionId);
+            std::shared_ptr<Connection> itsConnection
+                = getConnection(_connectionId);
             if (itsConnection) {
                 std::shared_ptr<Proxy> proxy
-                    = proxyCreateFunctionsIterator->second(someipAddress, itsConnection);
+                    = proxyCreateFunctionsIterator->second(
+                            someipAddress, itsConnection);
                 if (proxy && proxy->init())
                     return proxy;
             }
         }
     }
 
+    COMMONAPI_ERROR("Creating proxy for \"", _domain, ":", _interface, ":",
+            _instance, "\" failed!");
     return nullptr;
 }
 
 std::shared_ptr<CommonAPI::Proxy>
 Factory::createProxy(
-    const std::string &_domain, const std::string &_interface, const std::string &_instance,
+    const std::string &_domain,
+    const std::string &_interface, const std::string &_instance,
     std::shared_ptr<MainLoopContext> _context) {
 
-    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":", _instance, "\"");
+    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":",
+            _instance, "\"");
 
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
     if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
-            std::shared_ptr<Connection> itsConnection = getConnection(_context);
+            std::shared_ptr<Connection> itsConnection
+                = getConnection(_context);
             if (itsConnection) {
                 std::shared_ptr<Proxy> proxy
-                    = proxyCreateFunctionsIterator->second(someipAddress, itsConnection);
+                    = proxyCreateFunctionsIterator->second(
+                            someipAddress, itsConnection);
                 if (proxy && proxy->init())
                     return proxy;
             }
         }
     }
 
+    COMMONAPI_ERROR("Creating proxy for \"", _domain, ":", _interface, ":",
+            _instance, "\" failed!");
     return nullptr;
 }
 
 bool
 Factory::registerStub(
-        const std::string &_domain, const std::string &_interface, const std::string &_instance,
+        const std::string &_domain,
+        const std::string &_interface, const std::string &_instance,
         std::shared_ptr<StubBase> _stub, const ConnectionId_t &_connection) {
 
-    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":", _instance, "\"");
+    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":",
+            _instance, "\"");
 
-    auto stubAdapterCreateFunctionsIterator = stubAdapterCreateFunctions_.find(_interface);
-    if (stubAdapterCreateFunctionsIterator != stubAdapterCreateFunctions_.end()) {
+    auto stubAdapterCreateFunctionsIterator
+        = stubAdapterCreateFunctions_.find(_interface);
+    if (stubAdapterCreateFunctionsIterator
+            != stubAdapterCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         AddressTranslator::get()->translate(address, someipAddress);
@@ -137,60 +157,77 @@ Factory::registerStub(
         std::shared_ptr<Connection> itsConnection = getConnection(_connection);
         if (itsConnection) {
             std::shared_ptr<StubAdapter> adapter
-                = stubAdapterCreateFunctionsIterator->second(someipAddress, itsConnection, _stub);
+                = stubAdapterCreateFunctionsIterator->second(
+                        someipAddress, itsConnection, _stub);
             if (adapter) {
                 adapter->init(adapter);
-                return registerStubAdapter(adapter);
+                if (registerStubAdapter(adapter))
+                    return true;
             }
         }
     }
 
+    COMMONAPI_ERROR("Registering stub for \"", _domain, ":", _interface, ":",
+            _instance, "\" failed!");
     return false;
 }
 
 bool
 Factory::registerStub(
-        const std::string &_domain, const std::string &_interface, const std::string &_instance,
-        std::shared_ptr<StubBase> _stub, std::shared_ptr<MainLoopContext> _context) {
+        const std::string &_domain,
+        const std::string &_interface, const std::string &_instance,
+        std::shared_ptr<StubBase> _stub,
+        std::shared_ptr<MainLoopContext> _context) {
 
-    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":", _instance, "\"");
+    COMMONAPI_INFO("Registering stub for \"", _domain, ":", _interface, ":",
+            _instance, "\"");
 
-    auto stubAdapterCreateFunctionsIterator = stubAdapterCreateFunctions_.find(_interface);
-    if (stubAdapterCreateFunctionsIterator != stubAdapterCreateFunctions_.end()) {
+    auto stubAdapterCreateFunctionsIterator
+        = stubAdapterCreateFunctions_.find(_interface);
+    if (stubAdapterCreateFunctionsIterator
+            != stubAdapterCreateFunctions_.end()) {
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
         	std::shared_ptr<Connection> itsConnection = getConnection(_context);
         	if (itsConnection) {
 				std::shared_ptr<StubAdapter> adapter
-					= stubAdapterCreateFunctionsIterator->second(someipAddress, itsConnection, _stub);
+					= stubAdapterCreateFunctionsIterator->second(
+					        someipAddress, itsConnection, _stub);
 				if (adapter) {
 					adapter->init(adapter);
-					return registerStubAdapter(adapter);
+					if (registerStubAdapter(adapter))
+					    return true;
 				}
         	}
         }
     }
 
+    COMMONAPI_ERROR("Registering stub for \"", _domain, ":", _interface, ":",
+            _instance, "\" failed!");
     return false;
 }
 
 bool
 Factory::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
-    const std::shared_ptr<ProxyConnection> connection = _adapter->getConnection();
+    const std::shared_ptr<ProxyConnection> connection
+        = _adapter->getConnection();
     CommonAPI::Address address;
     Address someipAddress = _adapter->getSomeIpAddress();
     if (AddressTranslator::get()->translate(someipAddress, address)) {
         std::lock_guard<std::mutex> itsLock(servicesMutex_);
-        const auto &insertResult = services_.insert( { address.getAddress(), _adapter } );
+        const auto &insertResult
+            = services_.insert( { address.getAddress(), _adapter } );
         const bool &isInsertSuccessful = insertResult.second;
 
         if (isInsertSuccessful) {
-            std::shared_ptr<StubManager> manager = connection->getStubManager();
+            std::shared_ptr<StubManager> manager
+                = connection->getStubManager();
             manager->registerStubAdapter(_adapter);
             return true;
         }
     }
+
     return false;
 }
 
@@ -198,6 +235,10 @@ bool
 Factory::unregisterStub(const std::string &_domain,
                         const std::string &_interface,
                         const std::string &_instance) {
+
+    COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface, ":",
+            _instance, "\"");
+
     servicesMutex_.lock();
     CommonAPI::Address address(_domain, _interface, _instance);
 
@@ -205,6 +246,8 @@ Factory::unregisterStub(const std::string &_domain,
 
     if (adapterResult == services_.end()) {
         servicesMutex_.unlock();
+        COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface,
+                ":", _instance, "\" failed (Not registered).");
         return false;
     }
 
@@ -215,21 +258,30 @@ Factory::unregisterStub(const std::string &_domain,
 
     if(!services_.erase(address.getAddress())) {
         servicesMutex_.unlock();
+        COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface,
+                ":", _instance, "\" failed (Removal failed).");
         return false;
     }
+
+    decrementConnection(connection);
+
     servicesMutex_.unlock();
+
     return true;
 }
 
 
 std::shared_ptr<StubAdapter>
-Factory::createStubAdapter(const std::shared_ptr<StubBase> &_stub,
-                           const std::string &_interface,
-                           const Address &_address,
-                           const std::shared_ptr<ProxyConnection> &_connection) {
+Factory::createStubAdapter(
+        const std::shared_ptr<StubBase> &_stub,
+        const std::string &_interface,
+        const Address &_address,
+        const std::shared_ptr<ProxyConnection> &_connection) {
     std::shared_ptr<StubAdapter> stubAdapter;
-    auto stubAdapterCreateFunctionsIterator = stubAdapterCreateFunctions_.find(_interface);
-    if (stubAdapterCreateFunctionsIterator != stubAdapterCreateFunctions_.end()) {
+    auto stubAdapterCreateFunctionsIterator
+        = stubAdapterCreateFunctions_.find(_interface);
+    if (stubAdapterCreateFunctionsIterator
+            != stubAdapterCreateFunctions_.end()) {
         stubAdapter = stubAdapterCreateFunctionsIterator->second(
                         _address, _connection, _stub);
         if (stubAdapter)
@@ -237,7 +289,8 @@ Factory::createStubAdapter(const std::shared_ptr<StubBase> &_stub,
         else
             COMMONAPI_ERROR("Couldn't create stubAdapter for " + _interface);
     } else {
-        COMMONAPI_ERROR("Didn't find stubAdapter create function for: " + _interface);
+        COMMONAPI_ERROR("Didn't find stubAdapter create function for: "
+                + _interface);
     }
     return stubAdapter;
 }
@@ -257,6 +310,7 @@ Factory::registerManagedService(const std::shared_ptr<StubAdapter> &_adapter) {
         COMMONAPI_ERROR("Call to registerStubAdapter(_adapter) failed");
         return false;
     }
+    incrementConnection(_adapter->getConnection());
     return true;
 }
 
@@ -266,7 +320,8 @@ Factory::unregisterManagedService(const std::string &_address) {
     if(!unregisterStub(capiAddress.getDomain(),
                        capiAddress.getInterface(),
                        capiAddress.getInstance())) {
-        COMMONAPI_ERROR("Call to unregisterStub() failed with address: " + _address);
+        COMMONAPI_ERROR("Call to unregisterStub() failed with address: "
+                + _address);
         return false;
     }
     return true;
@@ -274,10 +329,11 @@ Factory::unregisterManagedService(const std::string &_address) {
 
 std::shared_ptr<Connection>
 Factory::getConnection(const ConnectionId_t &_connectionId) {
-    std::unique_lock<std::mutex> itsLock(connectionMutex_);
+    std::unique_lock<std::recursive_mutex> itsLock(connectionMutex_);
 
     auto itsConnectionIterator = connections_.find(_connectionId);
     if (itsConnectionIterator != connections_.end()) {
+        incrementConnection(itsConnectionIterator->second);
         return itsConnectionIterator->second;
     }
 
@@ -293,12 +349,13 @@ Factory::getConnection(const ConnectionId_t &_connectionId) {
         }
     }
 
+    incrementConnection(itsConnection);
     return itsConnection;
 }
 
 std::shared_ptr<Connection>
 Factory::getConnection(std::shared_ptr<MainLoopContext> _context) {
-    std::unique_lock<std::mutex> itsLock(connectionMutex_);
+    std::unique_lock<std::recursive_mutex> itsLock(connectionMutex_);
 
     if (!_context)
         return getConnection(DEFAULT_CONNECTION_ID);
@@ -321,46 +378,50 @@ Factory::getConnection(std::shared_ptr<MainLoopContext> _context) {
         }
     }
 
-    if (itsConnection)
+    if (itsConnection) {
+        incrementConnection(itsConnection);
     	itsConnection->attachMainLoopContext(_context);
+    }
 
     return itsConnection;
 }
 
-void Factory::incrementConnection(std::shared_ptr<ProxyConnection> _connection) {
+void Factory::incrementConnection(
+        std::shared_ptr<ProxyConnection> _connection) {
     std::shared_ptr<Connection> connection;
-    {
-        std::unique_lock<std::mutex> itsLock(connectionMutex_);
-        for (auto itsConnectionIterator = connections_.begin(); itsConnectionIterator != connections_.end(); itsConnectionIterator++) {
-            if (itsConnectionIterator->first == _connection->getConnectionId()) {
-                connection = itsConnectionIterator->second;
-                break;
-            }
+    std::unique_lock<std::recursive_mutex> itsLock(connectionMutex_);
+    for (auto itsConnectionIterator = connections_.begin();
+            itsConnectionIterator != connections_.end();
+            itsConnectionIterator++) {
+        if (itsConnectionIterator->first
+                == _connection->getConnectionId()) {
+            connection = itsConnectionIterator->second;
+            break;
         }
     }
-    if (connection) {
+    if (connection)
         connection->incrementConnection();
-    }
 }
 
-void Factory::decrementConnection(std::shared_ptr<ProxyConnection> _connection) {
+void Factory::decrementConnection(
+        std::shared_ptr<ProxyConnection> _connection) {
     std::shared_ptr<Connection> connection;
-    {
-        std::unique_lock<std::mutex> itsLock(connectionMutex_);
-        for (auto itsConnectionIterator = connections_.begin(); itsConnectionIterator != connections_.end(); itsConnectionIterator++) {
-            if (itsConnectionIterator->first == _connection->getConnectionId()) {
-                connection = itsConnectionIterator->second;
-                break;
-            }
+    std::unique_lock<std::recursive_mutex> itsLock(connectionMutex_);
+    for (auto itsConnectionIterator = connections_.begin();
+            itsConnectionIterator != connections_.end();
+            itsConnectionIterator++) {
+        if (itsConnectionIterator->first
+                == _connection->getConnectionId()) {
+            connection = itsConnectionIterator->second;
+            break;
         }
     }
-    if (connection) {
+    if (connection)
         connection->decrementConnection();
-    }
 }
 
 void Factory::releaseConnection(const ConnectionId_t& _connectionId) {
-    std::unique_lock<std::mutex> itsLock(connectionMutex_);
+    std::unique_lock<std::recursive_mutex> itsLock(connectionMutex_);
     connections_.erase(_connectionId);
 }
 

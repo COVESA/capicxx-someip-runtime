@@ -19,18 +19,36 @@ ProxyStatusEventHelper::ProxyStatusEventHelper(Proxy* proxy) :
         proxy_(proxy) {
 }
 
-void ProxyStatusEventHelper::onListenerAdded(const Listener& listener, const Subscription subscription) {
-    (void)listener;
-    std::function<void(uint32_t)> notifySpecificListenerHandler =
-                std::bind(&ProxyStatusEventHelper::onNotifySpecificListener, this,
-                        std::placeholders::_1);
-    proxy_->getConnection()->proxyPushFunction(notifySpecificListenerHandler, subscription);
+void ProxyStatusEventHelper::onListenerAdded(const Listener& _listener,
+                                             const Subscription _subscription) {
+    std::lock_guard<std::recursive_mutex> listenersLock(listenersMutex_);
+
+    //notify listener about availability status -> push function to mainloop
+    std::weak_ptr<Proxy> itsProxy = proxy_->shared_from_this();
+    std::function<void(std::weak_ptr<Proxy>, Listener, Subscription)> notifySpecificListenerHandler =
+            std::bind(&Proxy::notifySpecificListener,
+                      proxy_,
+                      std::placeholders::_1,
+                      std::placeholders::_2,
+                      std::placeholders::_3);
+    proxy_->getConnection()->proxyPushFunctionToMainLoop<Connection>(
+            notifySpecificListenerHandler,
+            itsProxy,
+            _listener,
+            _subscription);
 }
 
-void ProxyStatusEventHelper::onNotifySpecificListener(uint32_t subscription) {
-    AvailabilityStatus itsStatus = proxy_->getAvailabilityStatus();
-    if (itsStatus != AvailabilityStatus::UNKNOWN)
-        notifySpecificListener(subscription, itsStatus);
+void ProxyStatusEventHelper::onListenerRemoved(const Listener& _listener,
+                                               const Subscription _subscription) {
+    std::lock_guard<std::recursive_mutex> listenersLock(listenersMutex_);
+    (void)_listener;
+    auto listenerIt = listeners_.begin();
+    while(listenerIt != listeners_.end()) {
+        if(listenerIt->first == _subscription)
+            listenerIt = listeners_.erase(listenerIt);
+        else
+            ++listenerIt;
+    }
 }
 
 void Proxy::availabilityTimeoutThreadHandler() const {
@@ -45,7 +63,7 @@ void Proxy::availabilityTimeoutThreadHandler() const {
             isAvailableAsyncCallback,
             std::promise<AvailabilityStatus>,
             AvailabilityStatus,
-            std::chrono::time_point<std::chrono::high_resolution_clock>
+            std::chrono::steady_clock::time_point
             > CallbackData_t;
     std::list<CallbackData_t> callbacks;
 
@@ -55,14 +73,14 @@ void Proxy::availabilityTimeoutThreadHandler() const {
         timeoutsMutex_.lock();
 
         int timeout = std::numeric_limits<int>::max();
-        std::chrono::time_point<std::chrono::high_resolution_clock> minTimeout;
+        std::chrono::steady_clock::time_point minTimeout;
         if (timeouts_.size() > 0) {
             auto minTimeoutElement = std::min_element(timeouts_.begin(), timeouts_.end(),
                     [] (const AvailabilityTimeout_t& lhs, const AvailabilityTimeout_t& rhs) {
                         return std::get<0>(lhs) < std::get<0>(rhs);
             });
             minTimeout = std::get<0>(*minTimeoutElement);
-            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+            std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
             timeout = (int)std::chrono::duration_cast<std::chrono::milliseconds>(minTimeout - now).count();
         }
         timeoutsMutex_.unlock();
@@ -76,22 +94,23 @@ void Proxy::availabilityTimeoutThreadHandler() const {
             //iterate through timeouts
             auto it = timeouts_.begin();
             while (it != timeouts_.end()) {
-                std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+                std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
 
                 isAvailableAsyncCallback callback = std::get<1>(*it);
 
                 if (now > std::get<0>(*it)) {
                     //timeout
+                    std::chrono::steady_clock::time_point timepoint_;
                     if(isAvailable()) {
                         availabilityMutex_.lock();
                         callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
                                                             AvailabilityStatus::AVAILABLE,
-                                                            std::chrono::time_point<std::chrono::high_resolution_clock>()));
+                                                            timepoint_));
                     } else {
                         availabilityMutex_.lock();
                         callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
                                                             AvailabilityStatus::NOT_AVAILABLE,
-                                                            std::chrono::time_point<std::chrono::high_resolution_clock>()));
+                                                            timepoint_));
                     }
                     it = timeouts_.erase(it);
                     availabilityMutex_.unlock();
@@ -143,7 +162,7 @@ void Proxy::availabilityTimeoutThreadHandler() const {
         isAvailableAsyncCallback callback;
         AvailabilityStatus avStatus;
         int remainingTimeout;
-        std::chrono::high_resolution_clock::time_point now;
+        std::chrono::steady_clock::time_point now;
 
         auto it = callbacks.begin();
         while(it != callbacks.end()) {
@@ -151,7 +170,7 @@ void Proxy::availabilityTimeoutThreadHandler() const {
             avStatus = std::get<2>(*it);
 
             // compute remaining timeout
-            now = std::chrono::high_resolution_clock::now();
+            now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
             remainingTimeout = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::get<3>(*it) - now).count();
             if(remainingTimeout < 0)
                 remainingTimeout = 0;
@@ -174,6 +193,21 @@ void Proxy::availabilityTimeoutThreadHandler() const {
     }
 }
 
+void Proxy::notifySpecificListener(std::weak_ptr<Proxy> _proxy,
+                                   const ProxyStatusEvent::Listener &_listener,
+                                   const ProxyStatusEvent::Subscription _subscription) {
+    if(_proxy.lock()) {
+        std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
+
+        AvailabilityStatus itsStatus = availabilityStatus_;
+        if (itsStatus != AvailabilityStatus::UNKNOWN)
+            proxyStatusEvent_.notifySpecificListener(_subscription, itsStatus);
+
+        //add listener to list so that it can be notified about a change of availability
+        proxyStatusEvent_.listeners_.push_back(std::make_pair(_subscription, _listener));
+    }
+}
+
 void Proxy::onServiceInstanceStatus(service_id_t serviceId,
         instance_id_t instanceId, bool isAvailable) {
     {
@@ -192,11 +226,16 @@ void Proxy::onServiceInstanceStatus(service_id_t serviceId,
     availabilityTimeoutCondition_.notify_all();
     availabilityTimeoutThreadMutex_.unlock();
 
-    if (!isAvailable) {
+    if (!isAvailable)
         getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
-    }
 
-    proxyStatusEvent_.notifyListeners(availabilityStatus_);
+    //ensure, proxy survives until notification is done
+    auto itsSelf = selfReference_.lock();
+    {
+        std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
+        for(auto listenerIt : proxyStatusEvent_.listeners_)
+            proxyStatusEvent_.notifySpecificListener(listenerIt.first, availabilityStatus_);
+    }
     availabilityCondition_.notify_one();
 }
 
@@ -205,7 +244,6 @@ Proxy::Proxy(const Address &_address,
         ProxyBase(connection), address_(_address), proxyStatusEvent_(this), availabilityStatus_(
                 AvailabilityStatus::UNKNOWN), interfaceVersionAttribute_(*this,
                 0x0, true, false), hasSelectiveEvents_(hasSelective) {
-    Factory::get()->incrementConnection(getConnection());
 }
 
 Proxy::~Proxy() {
@@ -219,6 +257,7 @@ Proxy::~Proxy() {
 }
 
 bool Proxy::init() {
+    selfReference_ = shared_from_this();
     std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
             std::bind(&Proxy::onServiceInstanceStatus, this,
                     std::placeholders::_1, std::placeholders::_2,
@@ -270,7 +309,7 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
     std::future<AvailabilityStatus> future = promise.get_future();
 
     //set timeout point
-    auto timeoutPoint = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(_info->timeout_);
+    auto timeoutPoint = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now() + std::chrono::milliseconds(_info->timeout_);
 
     timeoutsMutex_.lock();
     if(timeouts_.size() == 0) {

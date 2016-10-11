@@ -29,10 +29,13 @@ class ProxyStatusEventHelper: public ProxyStatusEvent {
     ProxyStatusEventHelper(Proxy *_proxy);
 
  protected:
-    virtual void onListenerAdded(const Listener &_listener, const Subscription subscription);
-    virtual void onNotifySpecificListener(uint32_t subscription);
+    virtual void onListenerAdded(const Listener &_listener, const Subscription _subscription);
+    virtual void onListenerRemoved(const Listener &_listener, const Subscription _subscription);
 
     Proxy *proxy_;
+
+    std::recursive_mutex listenersMutex_;
+    std::vector<std::pair<ProxyStatusEvent::Subscription, ProxyStatusEvent::Listener>> listeners_;
 };
 
 class Factory;
@@ -66,6 +69,10 @@ public:
             eventgroup_id_t eventGroupId, event_id_t eventId,
             major_version_t major);
 
+    COMMONAPI_EXPORT virtual void notifySpecificListener(std::weak_ptr<Proxy> _proxy,
+                                                         const ProxyStatusEvent::Listener &_listener,
+                                                         const ProxyStatusEvent::Subscription _subscription);
+
 private:
     COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
 
@@ -93,11 +100,13 @@ private:
     mutable std::condition_variable availabilityTimeoutCondition_;
 
     typedef std::tuple<
-                std::chrono::time_point<std::chrono::high_resolution_clock>,
+                std::chrono::steady_clock::time_point,
                 isAvailableAsyncCallback,
                 std::promise<AvailabilityStatus>
                 > AvailabilityTimeout_t;
     mutable std::list<AvailabilityTimeout_t> timeouts_;
+
+    std::weak_ptr<Proxy> selfReference_;
 };
 
 } // namespace SomeIP

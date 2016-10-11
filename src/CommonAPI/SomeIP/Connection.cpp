@@ -18,18 +18,37 @@
 #include <CommonAPI/SomeIP/Connection.hpp>
 #include <CommonAPI/SomeIP/Defines.hpp>
 #include <CommonAPI/SomeIP/ProxyAsyncEventCallbackHandler.hpp>
+#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
 
-void Connection::proxyReceive(const std::shared_ptr<vsomeip::message> &_message) {
+void MsgQueueEntry::process(std::shared_ptr<Connection> _connection) {
+    _connection->processMsgQueueEntry(*this);
+}
+
+void AvblQueueEntry::process(std::shared_ptr<Connection> _connection) {
+    _connection->processAvblQueueEntry(*this);
+}
+
+void ErrQueueEntry::process(std::shared_ptr<Connection> _connection) {
+    _connection->processErrQueueEntry(*this);
+}
+
+void Connection::receive(const std::shared_ptr<vsomeip::message> &_message) {
+	commDirectionType itsDirection =
+			(_message->get_message_type() < vsomeip::message_type_e::MT_NOTIFICATION ?
+			commDirectionType::STUBRECEIVE : commDirectionType::PROXYRECEIVE);
     if (auto lockedContext = mainLoopContext_.lock()) {
-        std::shared_ptr<Watch::MsgQueueEntry> msg_queue_entry = std::make_shared<Watch::MsgQueueEntry>(
-                watch_, _message, Watch::commDirectionType::PROXYRECEIVE);
+        std::shared_ptr<MsgQueueEntry> msg_queue_entry
+			= std::make_shared<MsgQueueEntry>(_message, itsDirection);
         watch_->pushQueue(msg_queue_entry);
-    }
-    else {
-        handleProxyReceive(_message);
+    } else {
+    	if (itsDirection == commDirectionType::PROXYRECEIVE) {
+    		handleProxyReceive(_message);
+    	} else {
+    		handleStubReceive(_message);
+    	}
     }
 }
 
@@ -101,27 +120,9 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
     }
 }
 
-void Connection::stubReceive(const std::shared_ptr<vsomeip::message> &_message) {
-    if (auto lockedContext = mainLoopContext_.lock()) {
-        std::shared_ptr<Watch::MsgQueueEntry> msg_queue_entry = std::make_shared<Watch::MsgQueueEntry>(
-                        watch_, _message, Watch::commDirectionType::STUBRECEIVE);
-        watch_->pushQueue(msg_queue_entry);
-    }
-    else {
-        handleStubReceive(_message);
-    }
-}
-
 void Connection::handleStubReceive(const std::shared_ptr<vsomeip::message> &_message) {
     if(stubMessageHandler_) {
-        if (!stubMessageHandler_(Message(_message))) {
-            if (_message->get_message_type() == message_type_e::MT_REQUEST) {
-                auto error = vsomeip::runtime::get()->create_response(_message);
-                error->set_message_type(message_type_e::MT_ERROR);
-                error->set_return_code(return_code_e::E_MALFORMED_MESSAGE);
-                application_->send(error, true);
-            }
-        }
+        stubMessageHandler_(Message(_message));
     }
 }
 
@@ -134,8 +135,7 @@ void Connection::onConnectionEvent(state_type_e state) {
 void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _instance,
            bool _is_available) {
     if (auto lockedContext = mainLoopContext_.lock()) {
-        std::shared_ptr<Watch::AvblQueueEntry> avbl_queue_entry = std::make_shared<Watch::AvblQueueEntry>(
-                        watch_, _service, _instance, _is_available);
+        std::shared_ptr<AvblQueueEntry> avbl_queue_entry = std::make_shared<AvblQueueEntry>(_service, _instance, _is_available);
         watch_->pushQueue(avbl_queue_entry);
     }
     else {
@@ -180,8 +180,8 @@ void Connection::cleanup() {
     while (!cleanupCancelled_) {
         if (std::cv_status::timeout ==
             cleanupCondition_.wait_for(itsLock, std::chrono::milliseconds(timeout))) {
-            std::lock_guard<std::mutex> lock(sendReceiveMutex_);
-            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+            std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+            std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
             auto it = asyncAnswers_.begin();
             while (it != asyncAnswers_.end()) {
                 if(now > std::get<0>(it->second)) {
@@ -190,8 +190,8 @@ void Connection::cleanup() {
                     response->set_message_type(vsomeip::message_type_e::MT_ERROR);
                     response->set_return_code(vsomeip::return_code_e::E_TIMEOUT);
                     if (auto lockedContext = mainLoopContext_.lock()) {
-                        std::shared_ptr<Watch::MsgQueueEntry> msg_queue_entry = std::make_shared<Watch::MsgQueueEntry>(
-                                        watch_, response, Watch::commDirectionType::PROXYRECEIVE);
+                        std::shared_ptr<MsgQueueEntry> msg_queue_entry = std::make_shared<MsgQueueEntry>(
+                                        response, commDirectionType::PROXYRECEIVE);
                         watch_->pushQueue(msg_queue_entry);
                     } else {
                         std::get<2>(it->second)->onMessageReply(CallStatus::REMOTE_ERROR, Message(response));
@@ -205,8 +205,8 @@ void Connection::cleanup() {
 
         {
             timeout = std::numeric_limits<int>::max();
-            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-            std::lock_guard<std::mutex> lock(sendReceiveMutex_);
+            std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
+            std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
             for (auto it = asyncAnswers_.begin(); it != asyncAnswers_.end(); it++) {
                 int remaining = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::get<0>(it->second) - now).count();
                 if (timeout > remaining)
@@ -217,8 +217,7 @@ void Connection::cleanup() {
 }
 
 Connection::Connection(const std::string &_name)
-      : dispatchThread_(NULL),
-        connectionStatus_(state_type_e::ST_DEREGISTERED),
+      : connectionStatus_(state_type_e::ST_DEREGISTERED),
         application_(vsomeip::runtime::get()->create_application(_name)),
         asyncAnswersCleanupThread_(NULL),
         cleanupCancelled_(false),
@@ -271,7 +270,7 @@ bool Connection::connect(bool) {
 #ifndef WIN32
     asyncAnswersCleanupThread_ = std::make_shared<std::thread>(&Connection::cleanup, this);
 #endif
-    dispatchThread_ = new std::thread(&Connection::dispatch, this);
+    dispatchThread_ = std::make_shared<std::thread>(&Connection::dispatch, this);
     return true;
 }
 
@@ -291,7 +290,6 @@ void Connection::disconnect() {
     if(dispatchThread_) {
         if (dispatchThread_->joinable())
             dispatchThread_->join();
-        delete dispatchThread_;
     }
     application_->clear_all_handler();
     Factory::get()->releaseConnection(application_->get_name());
@@ -315,6 +313,9 @@ bool Connection::sendMessage(const Message& message, uint32_t*) const {
     if (!isConnected())
         return false;
 
+    if (message.isRequestType())
+        message.message_->set_message_type(message_type_e::MT_REQUEST_NO_RETURN);
+
     application_->send(message.message_);
     return true;
 }
@@ -334,15 +335,15 @@ bool Connection::sendEvent(const Message &message, client_id_t _client,
     return true;
 }
 
-std::future<CallStatus> Connection::sendMessageWithReplyAsync(
+bool Connection::sendMessageWithReplyAsync(
         const Message& message,
         std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler,
         const CommonAPI::CallInfo *_info) const {
 
     if (!isConnected())
-        return std::future<CallStatus>();
+        return false;
 
-    std::lock_guard<std::mutex> lock(sendReceiveMutex_);
+    std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
     application_->send(message.message_, true);
 
     if (_info->sender_ != 0) {
@@ -351,24 +352,16 @@ std::future<CallStatus> Connection::sendMessageWithReplyAsync(
                 ", SessionID: ", message.getSessionId());
     }
 
-    MessageReplyAsyncHandler* replyAsyncHandler = messageReplyAsyncHandler.get();
+    auto timeoutTime = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
+                       + std::chrono::milliseconds(_info->timeout_);
 
-    std::future<CallStatus> callStatusFuture;
-    try {
-        callStatusFuture = replyAsyncHandler->getFuture();
-    } catch (std::exception& e) {
-        (void)e;
-    }
+    asyncAnswers_[message.getSessionId()] = std::make_tuple(
+            timeoutTime, message.message_,
+            std::move(messageReplyAsyncHandler));
 
-    auto timeoutTime = std::chrono::high_resolution_clock::now()
-    				   + std::chrono::milliseconds(_info->timeout_);
-    asyncAnswers_[message.getSessionId()]
-		= std::make_tuple(
-				timeoutTime, message.message_,
-				std::move(messageReplyAsyncHandler));
     cleanupCondition_.notify_one();
 
-    return callStatusFuture;
+    return true;
 }
 
 Message Connection::sendMessageWithReplyAndBlock(
@@ -380,7 +373,7 @@ Message Connection::sendMessageWithReplyAndBlock(
 
 	std::pair<std::map<session_id_t, Message>::iterator, bool> itsAnswer;
     {
-        std::lock_guard<std::mutex> lock(sendReceiveMutex_);
+        std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
         application_->send(message.message_, true);
         if (_info->sender_ != 0) {
             COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
@@ -411,7 +404,7 @@ Message Connection::sendMessageWithReplyAndBlock(
     // If there was an answer (thus, we did not run into the timeout),
     // move it to itsResult
     if (waitStatus != std::cv_status::timeout) {
-		std::unique_lock<std::mutex> lock(sendReceiveMutex_);
+		std::unique_lock<std::recursive_mutex> lock(sendReceiveMutex_);
 		itsResult = std::move(itsAnswer.first->second);
 		sendAndBlockAnswers_.erase(itsAnswer.first);
     }
@@ -434,12 +427,12 @@ void Connection::addEventHandler(
     const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
 
     if(inserted) {
-        if(!isField) {
-            application_->subscribe(serviceId, instanceId, eventGroupId, major,
-                    vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
-        }
         if(isSelective) {
             addSelectiveErrorListener(serviceId, instanceId, eventGroupId);
+        } else if(!isField) {
+            subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
+            application_->subscribe(serviceId, instanceId, eventGroupId, major,
+                    vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
         }
     }
 }
@@ -452,7 +445,8 @@ void Connection::removeEventHandler(
         ProxyConnection::EventHandler* eventHandler,
         major_version_t major,
         minor_version_t minor) {
-
+    (void)major;
+    (void)minor;
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     auto foundService = eventHandlers_.find(serviceId);
     if (foundService != eventHandlers_.end()) {
@@ -463,8 +457,20 @@ void Connection::removeEventHandler(
                 foundEventId->second.erase(eventHandler);
                 if (foundEventId->second.size() == 0) {
                     foundInstance->second.erase(foundEventId);
-                    if (application_->is_available(serviceId, instanceId, major, minor)) {
-                        application_->unsubscribe(serviceId, instanceId, eventGroupId);
+
+                    //decrement subscription counter for given eventgroup
+                    auto s = subscriptionCounters_.find(serviceId);
+                    if (s != subscriptionCounters_.end()) {
+                        auto i = s->second.find(instanceId);
+                        if (i != s->second.end()) {
+                            auto g = i->second.find(eventGroupId);
+                            if (g != i->second.end()) {
+                                g->second--;
+                                if(g->second == 0) {
+                                    application_->unsubscribe(serviceId, instanceId, eventGroupId);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -510,9 +516,11 @@ void Connection::removeEventHandler(
             eventGroupId);
 }
 
-void Connection::subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
-                     eventgroup_id_t eventGroupId, ProxyConnection::EventHandler* eventHandler,
-					 uint32_t _tag, major_version_t major) {
+void Connection::subscribeForSelective(
+        service_id_t serviceId, instance_id_t instanceId,
+        eventgroup_id_t eventGroupId, event_id_t eventId,
+        ProxyConnection::EventHandler* eventHandler, uint32_t _tag,
+        major_version_t major) {
     std::set<uint32_t> tags;
     tags.insert(_tag);
 
@@ -520,14 +528,16 @@ void Connection::subscribeForSelective(service_id_t serviceId, instance_id_t ins
     selectiveErrorHandlers_[serviceId][instanceId][eventGroupId].push(std::make_pair(eventHandler, tags));
     pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][eventHandler].insert(_tag);
 
-    application_->subscribe(serviceId, instanceId, eventGroupId, major);
+    application_->subscribe(serviceId, instanceId, eventGroupId, major,
+            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
 }
 
 void Connection::addSelectiveErrorListener(service_id_t serviceId,
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId) {
 
-    auto errorHandler = [serviceId, instanceId, eventGroupId, this] (
+    auto connection = shared_from_this();
+    auto errorHandler = [serviceId, instanceId, eventGroupId, connection, this] (
                     const uint16_t errorCode) {
         std::unique_lock<std::mutex> lock(eventHandlerMutex_);
         {
@@ -543,9 +553,10 @@ void Connection::addSelectiveErrorListener(service_id_t serviceId,
                             for (uint32_t tag : entry.second) {
                                 ProxyConnection::EventHandler* handler = entry.first;
                                 if (auto lockedContext = mainLoopContext_.lock()) {
-                                    std::shared_ptr<Watch::ErrQueueEntry> err_queue_entry =
-                                            std::make_shared<Watch::ErrQueueEntry>(
-                                                    handler, errorCode, tag);
+                                    std::shared_ptr<ErrQueueEntry> err_queue_entry =
+                                            std::make_shared<ErrQueueEntry>(
+                                                    handler, errorCode, tag,
+                                                    serviceId, instanceId, eventGroupId);
                                     watch_->pushQueue(err_queue_entry);
                                 } else {
                                     handler->onError(errorCode, tag);
@@ -658,7 +669,7 @@ Connection::registerService(const Address &_address) {
     minor_version_t minorVersion = _address.getMinorVersion();
 
     vsomeip::message_handler_t handler
-        = std::bind(&Connection::stubReceive, shared_from_this(), std::placeholders::_1);
+        = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
     application_->register_message_handler(service, instance, SOMEIP_ANY_METHOD, handler);
     application_->offer_service(service, instance, majorVersion, minorVersion);
 }
@@ -689,7 +700,7 @@ Connection::requestService(const Address &_address, bool _hasSelective) {
                                   _hasSelective);
 
     vsomeip::message_handler_t handler
-        = std::bind(&Connection::proxyReceive, shared_from_this(), std::placeholders::_1);
+        = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
     application_->register_message_handler(service, instance, SOMEIP_ANY_METHOD, handler);
 }
 
@@ -748,14 +759,14 @@ bool Connection::isStubMessageHandlerSet() {
     return stubMessageHandler_.operator bool();
 }
 
-void Connection::processMsgQueueEntry(Watch::MsgQueueEntry &_msgQueueEntry) {
-    Watch::commDirectionType commDirType = _msgQueueEntry.directionType_;
+void Connection::processMsgQueueEntry(MsgQueueEntry &_msgQueueEntry) {
+    commDirectionType commDirType = _msgQueueEntry.directionType_;
 
     switch(commDirType) {
-    case Watch::commDirectionType::PROXYRECEIVE:
+    case commDirectionType::PROXYRECEIVE:
         handleProxyReceive(_msgQueueEntry.message_);
         break;
-    case Watch::commDirectionType::STUBRECEIVE:
+    case commDirectionType::STUBRECEIVE:
         handleStubReceive(_msgQueueEntry.message_);
         break;
     default:
@@ -764,13 +775,36 @@ void Connection::processMsgQueueEntry(Watch::MsgQueueEntry &_msgQueueEntry) {
     }
 }
 
-void Connection::processAvblQueueEntry(Watch::AvblQueueEntry &_avblQueueEntry) {
+void Connection::processAvblQueueEntry(AvblQueueEntry &_avblQueueEntry) {
     handleAvailabilityChange(_avblQueueEntry.service_, _avblQueueEntry.instance_,
             _avblQueueEntry.isAvailable_);
 }
 
-void Connection::processFunctionQueueEntry(Watch::FunctionQueueEntry &_functionQueueEntry) {
-    _functionQueueEntry.function_(_functionQueueEntry.value_);
+void Connection::processErrQueueEntry(ErrQueueEntry &_errQueueEntry) {
+    std::lock_guard<std::mutex> lock(eventHandlerMutex_);
+    auto foundService = pendingSelectiveErrorHandlers_.find(_errQueueEntry.service_);
+    if (foundService != pendingSelectiveErrorHandlers_.end()) {
+        auto foundInstance = foundService->second.find(
+                _errQueueEntry.instance_);
+        if (foundInstance != foundService->second.end()) {
+            auto foundEventGroup = foundInstance->second.find(
+                    _errQueueEntry.eventGroup_);
+            if (foundEventGroup != foundInstance->second.end()) {
+                auto foundEventHandler = foundEventGroup->second.find(
+                        _errQueueEntry.eventHandler_);
+                if (foundEventHandler != foundEventGroup->second.end()) {
+                    auto foundSubscriptionId = foundEventHandler->second.find(
+                            _errQueueEntry.tag_);
+                    if (foundSubscriptionId
+                            != foundEventHandler->second.end()) {
+                        foundEventHandler->first->onError(
+                                _errQueueEntry.errorCode_,
+                                *foundSubscriptionId);
+                    }
+                }
+            }
+        }
+    }
 }
 
 const ConnectionId_t& Connection::getConnectionId() {
@@ -807,7 +841,6 @@ void Connection::queueSelectiveErrorHandler(service_id_t serviceId,
 
 void Connection::registerSubsciptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) {
-
     application_->register_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, _handler);
 }
 
@@ -842,20 +875,23 @@ void Connection::incrementConnection() {
 }
 
 void Connection::decrementConnection() {
+    uint32_t activeConnections = 0;
+    {
     std::lock_guard < std::mutex > lock(activeConnectionsMutex_);
-    activeConnections_--;
+    activeConnections = --activeConnections_;
+    }
 
-    if (!activeConnections_) {
+    if (!activeConnections) {
         disconnect();
     }
 }
 
-void Connection::proxyPushMessage(const Message &_message,
+void Connection::proxyPushMessageToMainLoop(const Message &_message,
                                   std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler) {
     //add message to the async answers
     {
-        std::lock_guard<std::mutex> lock(sendReceiveMutex_);
-        auto timeoutTime = std::chrono::high_resolution_clock::now()
+        std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+        auto timeoutTime = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
                            + std::chrono::milliseconds(ASYNC_MESSAGE_REPLY_TIMEOUT_MS);
         asyncAnswers_[_message.getSessionId()]
             = std::make_tuple(
@@ -864,17 +900,24 @@ void Connection::proxyPushMessage(const Message &_message,
     }
 
     //handle the message by the mainloop or by the current thread
-    proxyReceive(_message.message_);
+    receive(_message.message_);
 }
 
-void Connection::proxyPushFunction(std::function<void(const uint32_t)> _function, uint32_t _value) {
-    if (auto lockedContext = mainLoopContext_.lock()) {
-        std::shared_ptr<Watch::FunctionQueueEntry> functionQueueEntry = std::make_shared<Watch::FunctionQueueEntry>(
-                watch_, _function, _value);
-        watch_->pushQueue(functionQueueEntry);
-    }
-    else {
-        _function(_value);
+void Connection::getAvailableInstances(service_id_t _serviceId, std::vector<std::string> *_instances) {
+    vsomeip::application::available_t itsAvailableServices;
+    if(application_->are_available(itsAvailableServices, _serviceId)) {
+        for(auto itsAvailableServicesIt = itsAvailableServices.begin();
+                itsAvailableServicesIt != itsAvailableServices.end();
+                ++itsAvailableServicesIt) {
+            for(auto itsAvailableInstancesIt = itsAvailableServicesIt->second.begin();
+                    itsAvailableInstancesIt != itsAvailableServicesIt->second.end();
+                    ++itsAvailableInstancesIt) {
+                Address service(_serviceId, itsAvailableInstancesIt->first);
+                CommonAPI::Address capiAddressService;
+                AddressTranslator::get()->translate(service, capiAddressService);
+                _instances->push_back(capiAddressService.getInstance());
+            }
+        }
     }
 }
 

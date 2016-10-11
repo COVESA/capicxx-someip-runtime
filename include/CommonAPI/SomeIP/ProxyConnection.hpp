@@ -65,7 +65,7 @@ class ProxyConnection {
 
     virtual bool sendMessage(const Message &message, uint32_t *allocatedSerial = NULL) const = 0;
 
-    virtual std::future< CallStatus > sendMessageWithReplyAsync(
+    virtual bool sendMessageWithReplyAsync(
             const Message &message,
             std::unique_ptr< MessageReplyAsyncHandler > messageReplyAsyncHandler,
             const CommonAPI::CallInfo *_info) const = 0;
@@ -105,6 +105,7 @@ class ProxyConnection {
                  service_id_t serviceId,
                  instance_id_t instanceId,
                  eventgroup_id_t eventGroupId,
+                 event_id_t eventId,
                  ProxyConnection::EventHandler* eventHandler,
                  uint32_t _tag,
                  major_version_t major) = 0;
@@ -152,12 +153,18 @@ class ProxyConnection {
                                  event_id_t eventId,
                                  major_version_t major) = 0;
 
-    virtual void proxyPushMessage(const Message &_message,
+    virtual void proxyPushMessageToMainLoop(const Message &_message,
                                   std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler) = 0;
 
-    virtual void proxyPushFunction(std::function<void(const uint32_t)> _function, uint32_t _value) = 0;
+    template<class Connection, class Function, class... Arguments>
+    void proxyPushFunctionToMainLoop(Function&& _function, Arguments&& ... _args) {
+        static_cast<Connection*>(this)->proxyPushFunctionToMainLoop(std::forward<Function>(_function), std::forward<Arguments>(_args) ...);
+    }
 
     virtual const ConnectionId_t& getConnectionId() = 0;
+
+    virtual void getAvailableInstances(service_id_t _serviceId, std::vector<std::string> *_instances) = 0;
+
 };
 
 
