@@ -50,6 +50,7 @@ class Message {
     COMMONAPI_EXPORT bool isErrorType() const;
     COMMONAPI_EXPORT bool isRequestType() const;
     COMMONAPI_EXPORT bool isRequestNoResponseType() const;
+    COMMONAPI_EXPORT bool isInitialValue() const;
 
     COMMONAPI_EXPORT byte_t* getBodyData() const;
     COMMONAPI_EXPORT message_length_t getBodyLength() const;

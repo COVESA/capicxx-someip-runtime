@@ -26,9 +26,7 @@ class InstanceAvailabilityStatusChangedEvent :
         public ProxyConnection::EventHandler,
         public std::enable_shared_from_this<InstanceAvailabilityStatusChangedEvent> {
 public:
-    COMMONAPI_EXPORT InstanceAvailabilityStatusChangedEvent(Proxy &_proxy,
-                                           const std::string &_interfaceName,
-                                           const service_id_t &_serviceId);
+    COMMONAPI_EXPORT InstanceAvailabilityStatusChangedEvent(const std::string &_interfaceName);
     COMMONAPI_EXPORT virtual ~InstanceAvailabilityStatusChangedEvent();
 
     COMMONAPI_EXPORT virtual void onEventMessage(const Message& _message);
@@ -50,14 +48,10 @@ private:
                         const instance_id_t &_instanceId);
 
 private:
-    Proxy& proxy_;
     std::string observedInterfaceName_;
-    service_id_t observedInterfaceServiceId_;
-    std::shared_ptr<ProxyConnection> proxyConnection_;
     std::mutex instancesMutex_;
     std::map<instance_id_t, std::string> instancesForward_;
     std::map<std::string, instance_id_t> instancesBackward_;
-    AvailabilityHandlerId_t availabilityHandlerId_;
 };
 
 } // namespace SomeIP

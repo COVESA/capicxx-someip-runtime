@@ -6,6 +6,7 @@
 #include <CommonAPI/SomeIP/Watch.hpp>
 
 #include <fcntl.h>
+#include <cstdio>
 
 #ifdef WIN32
 #include <Winsock2.h>
@@ -18,7 +19,27 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-Watch::Watch(const std::shared_ptr<Connection>& _connection) : connection_(_connection), pipeValue_(4) {
+void Watch::MsgQueueEntry::process() {
+    if(auto connection = watch_->connection_.lock())
+        connection->processMsgQueueEntry(*this);
+}
+
+void Watch::AvblQueueEntry::process() {
+    if(auto connection = watch_->connection_.lock())
+         connection->processAvblQueueEntry(*this);
+}
+
+void Watch::ErrQueueEntry::process() {
+    if(eventHandler_)
+        eventHandler_->onError(errorCode_, tag_);
+}
+
+void Watch::FunctionQueueEntry::process() {
+    if(auto connection = watch_->connection_.lock())
+         connection->processFunctionQueueEntry(*this);
+}
+
+Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
 #ifdef WIN32
     std::string pipeName = "\\\\.\\pipe\\CommonAPI-SomeIP-";
 
@@ -97,10 +118,14 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) : connection_(_conn
         }
     }
 #else
-    pipe2(pipeFileDescriptors_, O_NONBLOCK);
+    if(pipe2(pipeFileDescriptors_, O_NONBLOCK) == -1) {
+        std::perror(__func__);
+    }
 #endif
     pollFileDescriptor_.fd = pipeFileDescriptors_[0];
-    pollFileDescriptor_.events = POLLRDNORM;
+    pollFileDescriptor_.events = POLLIN;
+
+    connection_ = _connection;
 }
 
 Watch::~Watch() {
@@ -122,6 +147,9 @@ Watch::~Watch() {
     if (!retVal) {
         printf(TEXT("CloseHandle2 failed. GLE=%d\n"), GetLastError());
     }
+#else
+    close(pipeFileDescriptors_[0]);
+    close(pipeFileDescriptors_[1]);
 #endif
 }
 
@@ -157,9 +185,9 @@ void Watch::removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSo
     }
 }
 
-void Watch::pushQueue(Watch::msgQueueEntry _msgQueueEntry) {
-    std::unique_lock<std::mutex> itsLock(msgQueueMutex_);
-    msgQueue_.push(_msgQueueEntry);
+void Watch::pushQueue(std::shared_ptr<Watch::QueueEntry> _queueEntry) {
+    std::unique_lock<std::mutex> itsLock(queueMutex_);
+    queue_.push(_queueEntry);
 
 #ifdef WIN32
     char writeValue[sizeof(pipeValue_)];
@@ -178,12 +206,14 @@ void Watch::pushQueue(Watch::msgQueueEntry _msgQueueEntry) {
         printf(TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError());
     }
 #else
-    write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_));
+    if(write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_)) == -1) {
+        std::perror(__func__);
+    }
 #endif
 }
 
 void Watch::popQueue() {
-    std::unique_lock<std::mutex> itsLock(msgQueueMutex_);
+    std::unique_lock<std::mutex> itsLock(queueMutex_);
 
 #ifdef WIN32
     char readValue[sizeof(pipeValue_)];
@@ -202,26 +232,28 @@ void Watch::popQueue() {
     }
 #else
     int readValue = 0;
-    read(pipeFileDescriptors_[0], &readValue, sizeof(readValue));
+    if(read(pipeFileDescriptors_[0], &readValue, sizeof(readValue)) == -1) {
+        std::perror(__func__);
+    }
 #endif
 
-    msgQueue_.pop();
+    queue_.pop();
 }
 
-Watch::msgQueueEntry& Watch::frontQueue() {
-    std::unique_lock<std::mutex> itsLock(msgQueueMutex_);
+std::shared_ptr<Watch::QueueEntry> Watch::frontQueue() {
+    std::unique_lock<std::mutex> itsLock(queueMutex_);
 
-    return msgQueue_.front();
+    return queue_.front();
 }
 
 bool Watch::emptyQueue() {
-    std::unique_lock<std::mutex> itsLock(msgQueueMutex_);
+    std::unique_lock<std::mutex> itsLock(queueMutex_);
 
-    return msgQueue_.empty();
+    return queue_.empty();
 }
 
-void Watch::processMsgQueueEntry(msgQueueEntry &_msgQueueEntry) {
-    connection_->processMsgQueueEntry(_msgQueueEntry);
+void Watch::processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry) {
+    _queueEntry->process();
 }
 
 } // namespace SomeIP

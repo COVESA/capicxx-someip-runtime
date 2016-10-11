@@ -13,10 +13,13 @@
 #include <memory>
 #include <queue>
 #include <mutex>
+#include <functional>
 
 #include <vsomeip/application.hpp>
 
 #include <CommonAPI/MainLoopContext.hpp>
+#include <CommonAPI/SomeIP/Types.hpp>
+#include <CommonAPI/SomeIP/ProxyConnection.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -25,11 +28,88 @@ class Connection;
 
 class Watch : public CommonAPI::Watch {
  public:
+
     enum class commDirectionType : uint8_t {
         PROXYRECEIVE = 0x00,
         STUBRECEIVE = 0x01,
     };
-    typedef std::pair<std::shared_ptr<vsomeip::message>, commDirectionType> msgQueueEntry;
+
+    struct QueueEntry {
+
+        QueueEntry() { }
+        QueueEntry(Watch* _watch) :
+            watch_(_watch) { }
+
+        virtual void process() = 0;
+
+        Watch* watch_;
+    };
+
+    struct MsgQueueEntry : QueueEntry {
+
+        MsgQueueEntry(Watch* _watch,
+                      std::shared_ptr<vsomeip::message> _message,
+                      commDirectionType _directionType) :
+                          QueueEntry(_watch),
+                          message_(_message),
+                          directionType_(_directionType) { }
+
+        std::shared_ptr<vsomeip::message> message_;
+        commDirectionType directionType_;
+
+        void process();
+    };
+
+    struct AvblQueueEntry : QueueEntry {
+
+        AvblQueueEntry(Watch* _watch,
+                       service_id_t _service,
+                       instance_id_t _instance,
+                       bool _isAvailable) :
+                           QueueEntry(_watch),
+                           service_(_service),
+                           instance_(_instance),
+                           isAvailable_(_isAvailable) { }
+
+        service_id_t service_;
+        instance_id_t instance_;
+
+        bool isAvailable_;
+
+        void process();
+    };
+
+    struct ErrQueueEntry : QueueEntry {
+
+        ErrQueueEntry(ProxyConnection::EventHandler* _eventHandler,
+                      uint16_t _errorCode, uint32_t _tag) :
+                      eventHandler_(_eventHandler),
+                      errorCode_(_errorCode),
+					  tag_(_tag) { }
+
+        ProxyConnection::EventHandler* eventHandler_;
+        uint16_t errorCode_;
+        uint32_t tag_;
+
+        void process();
+    };
+
+    struct FunctionQueueEntry : QueueEntry {
+
+        typedef std::function<void(const uint32_t)> Function;
+
+        FunctionQueueEntry(Watch* _watch,
+                               Function _function,
+                               uint32_t _value) :
+                               QueueEntry(_watch),
+                               function_(std::move(_function)),
+                               value_(_value){ }
+
+        Function function_;
+        uint32_t value_;
+
+        void process();
+    };
 
     Watch(const std::shared_ptr<Connection>& _connection);
 
@@ -49,26 +129,26 @@ class Watch : public CommonAPI::Watch {
 
     void removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource);
 
-    void pushQueue(msgQueueEntry _msgQueueEntry);
+    void pushQueue(std::shared_ptr<QueueEntry> _queueEntry);
 
     void popQueue();
 
-    msgQueueEntry& frontQueue();
+    std::shared_ptr<QueueEntry> frontQueue();
 
     bool emptyQueue();
 
-    void processMsgQueueEntry(msgQueueEntry &_msgQueueEntry);
+    void processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry);
 
 private:
     int pipeFileDescriptors_[2];
 
     pollfd pollFileDescriptor_;
     std::vector<CommonAPI::DispatchSource*> dependentDispatchSources_;
-    std::queue<msgQueueEntry> msgQueue_;
+    std::queue<std::shared_ptr<QueueEntry>> queue_;
 
-    std::mutex msgQueueMutex_;
+    std::mutex queueMutex_;
 
-    std::shared_ptr<Connection> connection_;
+    std::weak_ptr<Connection> connection_;
 
     const int pipeValue_;
 #ifdef WIN32

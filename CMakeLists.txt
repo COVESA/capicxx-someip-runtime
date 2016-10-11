@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 1)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 5)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 8)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -20,11 +20,41 @@ set (COMMONAPI_API_HEADER_VERSION ${LIBCOMMONAPI_SOMEIP_MAJOR_VERSION}.${LIBCOMM
 
 SET(PACKAGE_VERSION "${COMPONENT_VERSION}") # used in *.cmake.in
 
+OPTION(USE_FILE "Set to OFF to disable file logging" OFF )
+message(STATUS "USE_FILE is set to value: ${USE_FILE}")
+
+OPTION(USE_CONSOLE "Set to OFF to disable console logging" OFF )
+message(STATUS "USE_CONSOLE is set to value: ${USE_CONSOLE}")
+
+SET(DEFAULT_SEND_TIMEOUT "5000" CACHE STRING "default send timeout")
+message(STATUS "DEFAULT_SEND_TIMEOUT is set to value: ${DEFAULT_SEND_TIMEOUT} ms")
+
+IF(USE_FILE)
+  add_definitions(-DUSE_FILE)
+ENDIF(USE_FILE)
+IF(USE_CONSOLE)
+  add_definitions(-DUSE_CONSOLE)
+ENDIF(USE_CONSOLE)
+
+add_definitions(-DDEFAULT_SEND_TIMEOUT=${DEFAULT_SEND_TIMEOUT})
+
 if (MSVC) 
 # Boost
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
+if(Boost_FOUND)
+  if(Boost_LIBRARY_DIR)
+    MESSAGE( STATUS "Boost_LIBRARY_DIR not empty using it: ${Boost_LIBRARY_DIR}" )
+  else()
+    if(BOOST_LIBRARYDIR)
+      MESSAGE( STATUS "Boost_LIBRARY_DIR empty but BOOST_LIBRARYDIR is set setting Boost_LIBRARY_DIR to: ${BOOST_LIBRARYDIR}" )
+      set(Boost_LIBRARY_DIR ${BOOST_LIBRARYDIR})
+    endif()
+  endif()
+else()
+  MESSAGE( STATUS "Boost was not found!")
+endif()
 include_directories( ${Boost_INCLUDE_DIR} )
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS /wd\\\"4503\\\"")
 link_directories(${Boost_LIBRARY_DIR})
 else()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP")
@@ -67,6 +97,7 @@ endif()
 
 # Offer the user the choice of overriding the installation directories
 set (INSTALL_LIB_DIR lib CACHE PATH "Installation directory for libraries")
+set (INSTALL_BIN_DIR bin CACHE PATH "Installation directory for executables")
 set (INSTALL_INCLUDE_DIR include/CommonAPI-${COMMONAPI_API_HEADER_VERSION} CACHE PATH "Installation directory for header files")
 
 if (WIN32 AND NOT CYGWIN)
@@ -88,9 +119,9 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.1.5 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.1.8 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.1.5 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(CommonAPI 3.1.8 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
@@ -101,14 +132,14 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 2.0.1 REQUIRED)
+find_package (vsomeip 2.2.0 REQUIRED)
 message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
+    include
     ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
     ${VSOMEIP_INCLUDE_DIRS}
-    include
 )
 
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
@@ -121,7 +152,7 @@ endif()
  
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
-set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${LIBCOMMONAPI_SOMEIP_MAJOR_VERSION})
+set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
 target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip ${RPCRT})
 
 ###################################################################################################
@@ -134,8 +165,9 @@ install (
     TARGETS CommonAPI-SomeIP
     # IMPORTANT: Add the CommonAPI-SomeIP library to the "export-set"
     EXPORT CommonAPI-SomeIPTargets
-    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-    RUNTIME DESTINATION "${PROJECT_BINARY_DIR}/Bin"
+	LIBRARY DESTINATION ${INSTALL_LIB_DIR}
+	RUNTIME DESTINATION ${INSTALL_BIN_DIR}
+	ARCHIVE DESTINATION ${INSTALL_LIB_DIR}
     PUBLIC_HEADER DESTINATION "${INSTALL_INCLUDE_DIR}/CommonAPI/SomeIP"
 )
 

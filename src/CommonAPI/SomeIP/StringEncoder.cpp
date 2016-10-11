@@ -64,7 +64,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
 
         uint32_t secondByte = *_utf16Str & 0xff;
 
-        uint32_t codePoint;
+        uint32_t codePoint = 0;
         if (_endianess == BIG_ENDIAN)
             codePoint = firstByte << 8 | secondByte;
         else if (_endianess == LITTLE_ENDIAN)
@@ -93,7 +93,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
 
             uint32_t fourthByte = *_utf16Str & 0xff;
 
-            uint32_t secondSurrogate;
+            uint32_t secondSurrogate = 0;
             if (_endianess == BIG_ENDIAN)
                 secondSurrogate = thirdByte << 8 | fourthByte;
             else if (_endianess == LITTLE_ENDIAN)

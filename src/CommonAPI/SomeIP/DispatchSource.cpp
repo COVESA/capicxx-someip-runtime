@@ -12,7 +12,7 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-DispatchSource::DispatchSource(const std::shared_ptr<Watch>& watch) :
+DispatchSource::DispatchSource(Watch* watch) :
     watch_(watch) {
     watch_->addDependentDispatchSource(this);
 }
@@ -36,9 +36,9 @@ bool DispatchSource::check() {
 bool DispatchSource::dispatch() {
     std::unique_lock<std::mutex> itsLock(watchMutex_);
     if (!watch_->emptyQueue()) {
-        auto msgQueueEntry = watch_->frontQueue();
+        auto queueEntry = watch_->frontQueue();
         watch_->popQueue();
-        watch_->processMsgQueueEntry(msgQueueEntry);
+        watch_->processQueueEntry(queueEntry);
     }
 
     return !watch_->emptyQueue();

@@ -18,13 +18,38 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-struct EnumerationDeployment : CommonAPI::Deployment<> {
-    EnumerationDeployment(uint8_t _width) : width_(_width) {}
+template<typename Type_>
+struct IntegerDeployment : CommonAPI::Deployment<>  {
+    IntegerDeployment(uint8_t _bits)
+            : bits_(_bits), hasInvalid_(false) {
+    }
+    IntegerDeployment(uint8_t _bits, const Type_ &_invalid)
+            : bits_(_bits), invalid_(_invalid), hasInvalid_(true) {
+    }
 
-    uint8_t width_;
+    uint8_t bits_;
+
+    Type_ invalid_;
+    bool hasInvalid_;
 };
 
-enum class StringEncoding {UTF8, UTF16LE, UTF16BE};
+template<typename Type_>
+struct EnumerationDeployment : CommonAPI::Deployment<> {
+    EnumerationDeployment(uint8_t _bits, bool _isSigned)
+            : bits_(_bits), isSigned_(_isSigned), hasInvalid_(false) {
+    }
+    EnumerationDeployment(uint8_t _bits, bool _isSigned, const Type_ &_invalid)
+            : bits_(_bits), isSigned_(_isSigned), invalid_(_invalid), hasInvalid_(true) {
+    }
+
+    uint8_t bits_;  // represents width (in bits), if no explicit bit deployment is provided
+    bool isSigned_;
+
+    Type_ invalid_;
+    bool hasInvalid_;
+};
+
+enum class StringEncoding { UTF8, UTF16LE, UTF16BE };
 
 struct StringDeployment : CommonAPI::Deployment<> {
     COMMONAPI_EXPORT StringDeployment(uint32_t _stringLength,
@@ -99,6 +124,21 @@ struct ArrayDeployment : CommonAPI::ArrayDeployment<ElementDepl_> {
     // If LengthWidth == 0, the array has arrayMaxLength_ elements.
     // If LengthWidth == 1, 2 or 4 bytes, arrayMinLength_ and arrayMaxLength_ are taken into account if > 0.
     uint8_t arrayLengthWidth_;
+};
+
+template<typename ElementDepl_, typename ValueDepl_>
+struct MapDeployment : CommonAPI::MapDeployment<ElementDepl_, ValueDepl_> {
+    MapDeployment(ElementDepl_ *_element, ValueDepl_ *_value,
+            uint32_t _mapMinLength, uint32_t _mapMaxLength,
+            uint8_t _mapLengthWidth)
+        : CommonAPI::MapDeployment<ElementDepl_, ValueDepl_>(_element, _value),
+          mapMinLength_(_mapMinLength),
+          mapMaxLength_(_mapMaxLength),
+          mapLengthWidth_(_mapLengthWidth) {}
+
+    uint32_t mapMinLength_;
+    uint32_t mapMaxLength_;
+    uint8_t mapLengthWidth_;
 };
 
 } // namespace SomeIP

@@ -10,13 +10,13 @@
 #ifndef COMMONAPI_SOMEIP_ATTRIBUTE_HPP_
 #define COMMONAPI_SOMEIP_ATTRIBUTE_HPP_
 
-#include <cassert>
 #include <cstdint>
 #include <tuple>
 
 #include <CommonAPI/SomeIP/Constants.hpp>
 #include <CommonAPI/SomeIP/Event.hpp>
 #include <CommonAPI/SomeIP/ProxyHelper.hpp>
+#include <CommonAPI/Logger.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -30,11 +30,13 @@ public:
 
     ReadonlyAttribute(Proxy &_proxy,
                       const method_id_t _getMethodId,
+                      const bool _isLittleEndian,
                       const bool _getReliable,
                       AttributeDepl_ *_depl = nullptr)
         : proxy_(_proxy),
           getMethodId_(_getMethodId),
           getReliable_(_getReliable),
+          isLittleEndian_(_isLittleEndian),
           depl_(_depl) {
     }
 
@@ -49,12 +51,14 @@ public:
                     proxy_,
                     getMethodId_,
                     getReliable_,
+                    isLittleEndian_,
                     (_info ? _info : &defaultCallInfo),
                     _status,
                     deployedValue);
             _value = deployedValue.getValue();
         } else {
             _status = CommonAPI::CallStatus::NOT_AVAILABLE;
+            COMMONAPI_ERROR("Wrong deployment configuration: SomeIpGetterID is set to zero.");
         }
     }
 
@@ -69,6 +73,7 @@ public:
                     proxy_,
                     getMethodId_,
                     getReliable_,
+                    isLittleEndian_,
                     (_info ? _info : &defaultCallInfo),
                     [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, AttributeDepl_> _response) {
                         _callback(_status, _response.getValue());
@@ -76,7 +81,7 @@ public:
                     std::make_tuple(deployedValue));
         } else {
             CommonAPI::CallStatus callStatus = CommonAPI::CallStatus::NOT_AVAILABLE;
-
+            COMMONAPI_ERROR("Wrong deployment configuration: SomeIpGetterID is set to zero.");
             ProxyHelper<
                 SerializableArguments<>,
                 SerializableArguments<CommonAPI::Deployable<ValueType, AttributeDepl_>>
@@ -97,6 +102,7 @@ protected:
     Proxy &proxy_;
     const method_id_t getMethodId_;
     const bool getReliable_;
+    const bool isLittleEndian_;
     AttributeDepl_ *depl_;
 };
 
@@ -108,11 +114,12 @@ public:
 
     Attribute(Proxy &_proxy,
               const method_id_t _getMethodId,
+              const bool _isLittleEndian,
               const bool _getReliable,
               const method_id_t _setMethodId,
               const bool _setReliable,
               AttributeDepl_ *_depl = nullptr)
-        : ReadonlyAttribute< AttributeType_, AttributeDepl_>(_proxy, _getMethodId, _getReliable, _depl),
+        : ReadonlyAttribute< AttributeType_, AttributeDepl_>(_proxy, _getMethodId, _isLittleEndian, _getReliable, _depl),
           setMethodId_(_setMethodId),
           setReliable_(_setReliable) {
     }
@@ -130,6 +137,7 @@ public:
                 this->proxy_,
                 setMethodId_,
                 setReliable_,
+                this->isLittleEndian_,
                 (_info ? _info : &defaultCallInfo),
                 deployedRequest,
                 _status,
@@ -148,6 +156,7 @@ public:
                >::callMethodAsync(this->proxy_,
                                   setMethodId_,
                                   setReliable_,
+                                  this->isLittleEndian_,
                                   (_info ? _info : &defaultCallInfo),
                                   deployedRequest,
                                   [_callback](CommonAPI::CallStatus _status, CommonAPI::Deployable<ValueType, AttributeDepl_> _response) {
@@ -175,12 +184,14 @@ public:
                         const event_id_t _eventId,
                         const method_id_t _getMethodId,
                         const bool _getReliable,
+                        const bool _isLittleEndian,
                         AttributeType_Arguments... _arguments)
-        : AttributeType_(_proxy, _getMethodId, _getReliable, _arguments...),
+        : AttributeType_(_proxy, _getMethodId, _isLittleEndian, _getReliable, _arguments...),
           changedEvent_(_proxy,
                         _eventgroupId,
                         _eventId,
                         true,
+                        _isLittleEndian,
                         _getMethodId,
                         _getReliable,
                         std::make_tuple(CommonAPI::Deployable<ValueType, ValueTypeDepl>(this->depl_))) {

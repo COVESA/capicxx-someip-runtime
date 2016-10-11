@@ -3,8 +3,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <cassert>
-
 #include <CommonAPI/SomeIP/Message.hpp>
 #include <CommonAPI/SomeIP/Connection.hpp>
 
@@ -113,6 +111,10 @@ bool Message::isRequestType() const {
 
 bool Message::isRequestNoResponseType() const {
     return (!message_ || (message_->get_message_type() == message_type_e::MT_REQUEST_NO_RETURN));
+}
+
+bool Message::isInitialValue() const {
+    return message_->is_initial();
 }
 
 byte_t *

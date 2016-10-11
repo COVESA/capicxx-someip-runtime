@@ -21,7 +21,7 @@ class Watch;
 
 class DispatchSource: public CommonAPI::DispatchSource {
  public:
-    DispatchSource(const std::shared_ptr<Watch>& watch);
+    DispatchSource(Watch* watch);
     virtual ~DispatchSource();
 
     bool prepare(int64_t& timeout);
@@ -29,7 +29,7 @@ class DispatchSource: public CommonAPI::DispatchSource {
     bool dispatch();
 
  private:
-    std::shared_ptr<Watch> watch_;
+    Watch* watch_;
 
     std::mutex watchMutex_;
 };

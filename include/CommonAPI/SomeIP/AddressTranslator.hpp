@@ -23,9 +23,12 @@ namespace SomeIP {
 
 class AddressTranslator {
 public:
+
     COMMONAPI_EXPORT static std::shared_ptr<AddressTranslator> get();
 
     COMMONAPI_EXPORT AddressTranslator();
+
+    COMMONAPI_EXPORT ~AddressTranslator();
 
     COMMONAPI_EXPORT void init();
 

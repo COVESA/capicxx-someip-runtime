@@ -25,10 +25,34 @@ Factory::get() {
     return theFactory;
 }
 
-Factory::Factory() {
+Factory::Factory() : isInitialized_(false) {
 }
 
 Factory::~Factory() {
+}
+
+void
+Factory::init() {
+#ifndef WIN32
+	std::lock_guard<std::mutex> itsLock(initializerMutex_);
+#endif
+	if (!isInitialized_) {
+		for (auto i : initializers_) i();
+		initializers_.clear(); // Not needed anymore
+		isInitialized_ = true;
+	}
+}
+
+void
+Factory::registerInterface(InterfaceInitFunction _function) {
+	std::lock_guard<std::mutex> itsLock(initializerMutex_);
+	if (isInitialized_) {
+		// We are already running --> initialize the interface library!
+		_function();
+	} else {
+		// We are not initialized --> save the initializer
+		initializers_.push_back(_function);
+	}
 }
 
 void
@@ -63,9 +87,8 @@ Factory::createProxy(
             if (itsConnection) {
                 std::shared_ptr<Proxy> proxy
                     = proxyCreateFunctionsIterator->second(someipAddress, itsConnection);
-                if (proxy)
-                    proxy->init();
-                return proxy;
+                if (proxy && proxy->init())
+                    return proxy;
             }
         }
     }
@@ -89,9 +112,8 @@ Factory::createProxy(
             if (itsConnection) {
                 std::shared_ptr<Proxy> proxy
                     = proxyCreateFunctionsIterator->second(someipAddress, itsConnection);
-                if (proxy)
-                    proxy->init();
-                return proxy;
+                if (proxy && proxy->init())
+                    return proxy;
             }
         }
     }
@@ -138,12 +160,15 @@ Factory::registerStub(
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
-            std::shared_ptr<StubAdapter> adapter
-                = stubAdapterCreateFunctionsIterator->second(someipAddress, getConnection(_context), _stub);
-            if (adapter) {
-                adapter->init(adapter);
-                return registerStubAdapter(adapter);
-            }
+        	std::shared_ptr<Connection> itsConnection = getConnection(_context);
+        	if (itsConnection) {
+				std::shared_ptr<StubAdapter> adapter
+					= stubAdapterCreateFunctionsIterator->second(someipAddress, itsConnection, _stub);
+				if (adapter) {
+					adapter->init(adapter);
+					return registerStubAdapter(adapter);
+				}
+        	}
         }
     }
 
@@ -260,10 +285,14 @@ Factory::getConnection(const ConnectionId_t &_connectionId) {
     std::shared_ptr<Connection> itsConnection
             = std::make_shared<Connection>(_connectionId);
     if (itsConnection) {
-        connections_.insert({ _connectionId, itsConnection } );
-
-        (void)itsConnection->connect(true);
+        if (!itsConnection->connect(true)) {
+        	COMMONAPI_ERROR("Failed to create connection ", _connectionId);
+        	itsConnection.reset();
+        } else {
+        	connections_.insert({ _connectionId, itsConnection } );
+        }
     }
+
     return itsConnection;
 }
 
@@ -282,16 +311,57 @@ Factory::getConnection(std::shared_ptr<MainLoopContext> _context) {
     } else {
         itsConnection = std::make_shared<Connection>(_context->getName());
         if (itsConnection) {
-            connections_.insert({ _context->getName(), itsConnection } );
-            (void)itsConnection->connect(false);
-        } else {
-            return nullptr;
+            if (!itsConnection->connect(false)) {
+            	COMMONAPI_ERROR("Failed to create connection ",
+            			_context->getName());
+            	itsConnection.reset();
+            } else {
+            	connections_.insert({ _context->getName(), itsConnection } );
+            }
         }
     }
 
-    itsConnection->attachMainLoopContext(_context);
+    if (itsConnection)
+    	itsConnection->attachMainLoopContext(_context);
 
     return itsConnection;
+}
+
+void Factory::incrementConnection(std::shared_ptr<ProxyConnection> _connection) {
+    std::shared_ptr<Connection> connection;
+    {
+        std::unique_lock<std::mutex> itsLock(connectionMutex_);
+        for (auto itsConnectionIterator = connections_.begin(); itsConnectionIterator != connections_.end(); itsConnectionIterator++) {
+            if (itsConnectionIterator->first == _connection->getConnectionId()) {
+                connection = itsConnectionIterator->second;
+                break;
+            }
+        }
+    }
+    if (connection) {
+        connection->incrementConnection();
+    }
+}
+
+void Factory::decrementConnection(std::shared_ptr<ProxyConnection> _connection) {
+    std::shared_ptr<Connection> connection;
+    {
+        std::unique_lock<std::mutex> itsLock(connectionMutex_);
+        for (auto itsConnectionIterator = connections_.begin(); itsConnectionIterator != connections_.end(); itsConnectionIterator++) {
+            if (itsConnectionIterator->first == _connection->getConnectionId()) {
+                connection = itsConnectionIterator->second;
+                break;
+            }
+        }
+    }
+    if (connection) {
+        connection->decrementConnection();
+    }
+}
+
+void Factory::releaseConnection(const ConnectionId_t& _connectionId) {
+    std::unique_lock<std::mutex> itsLock(connectionMutex_);
+    connections_.erase(_connectionId);
 }
 
 } // namespace SomeIP

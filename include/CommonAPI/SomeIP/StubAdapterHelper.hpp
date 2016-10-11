@@ -132,12 +132,13 @@ struct StubEventHelper<In_<InArgs_...>> {
 
     static inline bool sendEvent(const Address &_address,
                                  const event_id_t &_event,
+                                 const bool _isLittleEndian,
                                  const std::shared_ptr<ProxyConnection> &_connection,
                                  const InArgs_&... _in) {
 
         Message message = Message::createNotificationMessage(_address, _event, false);
         if (sizeof...(InArgs_) > 0) {
-            OutputStream output(message);
+            OutputStream output(message, _isLittleEndian);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
                 COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper: serialization failed!");
 
@@ -152,9 +153,11 @@ struct StubEventHelper<In_<InArgs_...>> {
     template <typename Stub_ = StubAdapter>
     static bool sendEvent(const Stub_ &_stub,
                           const event_id_t &_event,
+                          const bool _isLittleEndian,
                           const InArgs_&... _in) {
         return (sendEvent(_stub.getSomeIpAddress(),
                           _event,
+                          _isLittleEndian,
                           _stub.getConnection(),
                           _in...));
     }
@@ -163,12 +166,13 @@ struct StubEventHelper<In_<InArgs_...>> {
     static bool sendEvent(const client_id_t _client,
                           const Stub_ &_stub,
                           const event_id_t &_event,
+                          const bool _isLittleEndian,
                           const InArgs_&... _in) {
         Message message = Message::createNotificationMessage(
                 _stub.getSomeIpAddress(), _event, false);
 
         if (sizeof...(InArgs_) > 0) {
-            OutputStream output(message);
+            OutputStream output(message, _isLittleEndian);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
                 COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper 2: serialization failed!");
                 return false;
@@ -193,8 +197,8 @@ public:
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_...);
 
     MethodStubDispatcher(
-        StubFunctor_ stubFunctor, std::tuple<DeplInArgs_*...> _in)
-        : stubFunctor_(stubFunctor) {
+        StubFunctor_ stubFunctor, bool _isLittleEndian, std::tuple<DeplInArgs_*...> _in)
+        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian) {
 
         initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
@@ -221,7 +225,7 @@ private:
         (void)_adapterHelper;
 
         if (sizeof...(DeplInArgs_) > 0) {
-            InputStream inputStream(_message);
+            InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
                     inputStream, std::get<InArgIndices_>(in_)...))
                 return false;
@@ -239,6 +243,7 @@ private:
     }
 
     StubFunctor_ stubFunctor_;
+    bool isLittleEndian_;
 
     std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
 };
@@ -261,8 +266,8 @@ public:
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., ReplyType_t);
 
     MethodWithReplyStubDispatcher(
-        StubFunctor_ stubFunctor, std::tuple<DeplInArgs_*...> _in, std::tuple<DeplOutArgs_*...> _out)
-        : stubFunctor_(stubFunctor), out_(_out) {
+        StubFunctor_ stubFunctor, bool _isLittleEndian, std::tuple<DeplInArgs_*...> _in, std::tuple<DeplOutArgs_*...> _out)
+        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian), out_(_out) {
 
         initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
@@ -300,7 +305,7 @@ private:
         }
 
         if (sizeof...(DeplInArgs_) > 0) {
-            InputStream inputStream(_message);
+            InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
                     inputStream, std::get<InArgIndices_>(in_)...))
                 return false;
@@ -349,7 +354,7 @@ private:
         auto reply = pending_.find(_call);
         if (reply != pending_.end()) {
             if (sizeof...(DeplOutArgs_) > 0) {
-                OutputStream output(reply->second);
+                OutputStream output(reply->second, isLittleEndian_);
                 if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
                         output, std::get<OutArgIndices_>(_args)...)) {
                     pending_.erase(_call);
@@ -366,6 +371,7 @@ private:
     }
 
     StubFunctor_ stubFunctor_;
+    bool isLittleEndian_;
 
     std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
     std::tuple<DeplOutArgs_*...> out_;
@@ -393,8 +399,8 @@ public:
     typedef void (StubAdapterClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., OutArgs_&...);
     typedef typename CommonAPI::Stub<typename StubAdapterHelperType::StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
-    MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor)
-        : stubFunctor_(stubFunctor) {
+    MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor, bool _isLittleEndian)
+        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian) {
     }
 
     bool dispatchMessage(const Message &_message, const std::shared_ptr<StubClass_> &_stub, StubAdapterHelperType &_adapterHelper) {
@@ -425,7 +431,7 @@ public:
         } 
 
        if (sizeof...(InArgs_) > 0) {
-            InputStream inputStream(_message);
+            InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<InArgs_...>::deserialize(inputStream, std::get<InArgIndices_>(_argTuple)...))
                 return false;
         }
@@ -437,7 +443,7 @@ public:
         Message reply = _message.createResponseMessage();
 
         if (sizeof...(OutArgs_) > 0) {
-           OutputStream outputStream(reply);
+           OutputStream outputStream(reply, isLittleEndian_);
             if (!SerializableArguments<OutArgs_...>::serialize(outputStream, std::get<OutArgIndices_>(_argTuple)...))
                 return false;
 
@@ -448,6 +454,7 @@ public:
     }
 
     StubFunctor_ stubFunctor_;
+    bool isLittleEndian_;
 };
 
 
@@ -457,8 +464,8 @@ class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDisp
     typedef StubAdapterHelper<StubClass_> StubAdapterHelperType;
     typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
 
-    GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, AttributeDepl_ *_depl = nullptr)
-        : getStubFunctor_(getStubFunctor), depl_(_depl) {
+    GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
+        : getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
     }
 
     bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub, StubAdapterHelperType &stubAdapterHelper) {
@@ -468,7 +475,7 @@ class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDisp
  protected:
     inline bool sendAttributeValueReply(const Message &message, const std::shared_ptr<StubClass_>& stub, StubAdapterHelperType& stubAdapterHelper) {
         Message reply = message.createResponseMessage();
-        OutputStream outputStream(reply);
+        OutputStream outputStream(reply, isLittleEndian_);
 
         std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
 
@@ -479,6 +486,7 @@ class GetAttributeStubDispatcher: public StubAdapterHelper<StubClass_>::StubDisp
     }
 
     GetStubFunctor getStubFunctor_;
+    bool isLittleEndian_;
     AttributeDepl_ *depl_;
 };
 
@@ -496,8 +504,9 @@ public:
     SetAttributeStubDispatcher(GetStubFunctor getStubFunctor,
                                OnRemoteSetFunctor onRemoteSetFunctor,
                                OnRemoteChangedFunctor onRemoteChangedFunctor,
+                               bool _isLittleEndian,
                                AttributeDepl_ *_depl = nullptr)
-        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor, _depl),
+        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor, _isLittleEndian, _depl),
           onRemoteSetFunctor_(onRemoteSetFunctor),
           onRemoteChangedFunctor_(onRemoteChangedFunctor) {
     }
@@ -521,7 +530,7 @@ public:
                                   const std::shared_ptr<StubClass_>& stub,
                                   StubAdapterHelperType& stubAdapterHelper,
                                   bool& attributeValueChanged) {
-        InputStream inputStream(message);
+        InputStream inputStream(message, this->isLittleEndian_);
         CommonAPI::Deployable<AttributeType_, AttributeDepl_> attributeValue(this->depl_);
         inputStream >> attributeValue;
         if (inputStream.hasError()) {
@@ -564,10 +573,12 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
                                          OnRemoteSetFunctor onRemoteSetFunctor,
                                          OnRemoteChangedFunctor onRemoteChangedFunctor,
                                          FireChangedFunctor fireChangedFunctor,
+                                         bool _isLittleEndian,
                                          AttributeDepl_ *_depl = nullptr)
         : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor,
                                                                  onRemoteSetFunctor,
                                                                  onRemoteChangedFunctor,
+                                                                 _isLittleEndian,
                                                                  _depl),
                     fireChangedFunctor_(fireChangedFunctor) {
     }

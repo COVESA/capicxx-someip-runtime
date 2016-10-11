@@ -30,71 +30,34 @@ class Proxy;
 template <class, class>
 struct ProxyHelper;
 
-#ifdef WIN32
-// Visual Studio 2013 does not support 'magic statics' yet.
-// Change back when switched to Visual Studio 2015 or higher.
-static std::mutex callMethod_mutex_;
-static std::mutex callMethodWithReply_mutex_;
-static std::mutex callMethodAsync_mutex_;
-#endif
-
 template <
     template <class...> class In_, class... InArgs_,
     template <class...> class Out_, class... OutArgs_>
-    struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
+struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
 
-        template <typename Proxy_ = Proxy>
-        static void callMethod(
-            const Proxy_ &_proxy,
-            const method_id_t _methodId,
-            const bool _reliable,
-            const InArgs_ &... _inArgs,
-            CommonAPI::CallStatus &_callStatus) {
-#ifndef WIN32
-            static std::mutex callMethod_mutex_;
-#endif
-            std::lock_guard<std::mutex> lock(callMethod_mutex_);
-            Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
-            callMethod(_proxy, methodCall, _inArgs..., _callStatus);
-        }
+	template <typename Proxy_ = Proxy>
+	static void callMethod(
+		Proxy_ &_proxy,
+		const method_id_t _methodId,
+		const bool _isReliable,
+		const bool _isLittleEndian,
+		const InArgs_ &... _inArgs,
+		CommonAPI::CallStatus &_callStatus) {
 
-        template <typename Proxy_ = Proxy>
-        static void callMethod(const Proxy_ &_proxy,
-                        const char *_methodName,
-                        const char *_methodSignature,
-                        const InArgs_&... _inArgs,
-                        CommonAPI::CallStatus &_callStatus) {
-
-        if (_proxy.isAvailable()) {
-
-            Message message = _proxy.createMethodCall(_methodName, _methodSignature);
-
-            if (sizeof...(InArgs_) > 0) {
-                OutputStream outputStream(message);
-                const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
-                if (!success) {
-                    _callStatus = CallStatus::OUT_OF_MEMORY;
-                    return;
-                }
-                outputStream.flush();
-            }
-
-            const bool isSent = _proxy.getSomeIpConnection()->sendSomeIpMessage(message);
-            _callStatus = isSent ? CallStatus::SUCCESS : CallStatus::OUT_OF_MEMORY;
-        } else {
-            _callStatus = CallStatus::NOT_AVAILABLE;
-        }
-    }
+		Message methodCall = _proxy.createMethodCall(_methodId, _isReliable);
+		callMethod(_proxy, methodCall, _isLittleEndian, _inArgs..., _callStatus);
+	}
 
     template <typename Proxy_ = Proxy>
     static void callMethod(
-        const Proxy_ &_proxy,
+        Proxy_ &_proxy,
         Message &_methodCall,
+        const bool _isLittleEndian,
         const InArgs_ &... _inArgs,
         CommonAPI::CallStatus &_callStatus) {
         if (_proxy.isAvailable()) {
             if (sizeof...(InArgs_) > 0) {
-                OutputStream outputStream(_methodCall);
+                OutputStream outputStream(_methodCall, _isLittleEndian);
                 const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
                     _callStatus = CallStatus::OUT_OF_MEMORY;
@@ -119,15 +82,16 @@ template <
 
     template <typename Proxy_ = Proxy>
     static void callMethodWithReply(
-                    const Proxy_ &_proxy,
+                    Proxy_ &_proxy,
                     Message &_methodCall,
+                    const bool _isLittleEndian,
                     const CommonAPI::CallInfo *_info,
                     const InArgs_ &... _inArgs,
                     CommonAPI::CallStatus &_callStatus,
                     OutArgs_ &... _outArgs) {
         if (_proxy.isAvailable()) {
             if (sizeof...(InArgs_) > 0) {
-                OutputStream outputStream(_methodCall);
+                OutputStream outputStream(_methodCall, _isLittleEndian);
                 const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
                     _callStatus = CallStatus::OUT_OF_MEMORY;
@@ -144,7 +108,7 @@ template <
             }
 
             if (sizeof...(OutArgs_) > 0) {
-                InputStream inputStream(reply);
+                InputStream inputStream(reply, _isLittleEndian);
                 const bool success = SerializableArguments<OutArgs_...>::deserialize(inputStream, _outArgs...);
                 if (!success) {
                     _callStatus = CallStatus::REMOTE_ERROR;
@@ -159,73 +123,88 @@ template <
 
     template <typename Proxy_ = Proxy>
     static void callMethodWithReply(
-                    const Proxy_ &_proxy,
+                    Proxy_ &_proxy,
                     const method_id_t _methodId,
-                    const bool _reliable,
+                    const bool _isReliable,
+                    const bool _isLittleEndian,
                     const CommonAPI::CallInfo *_info,
                     const InArgs_&... _inArgs,
                     CommonAPI::CallStatus &_callStatus,
                     OutArgs_&... _outArgs) {
-#ifndef WIN32
-        static std::mutex callMethodWithReply_mutex_;
-#endif
-        std::lock_guard<std::mutex> lock(callMethodWithReply_mutex_);
-        Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
-        callMethodWithReply(_proxy, methodCall, _info, _inArgs..., _callStatus, _outArgs...);
+        Message methodCall = _proxy.createMethodCall(_methodId, _isReliable);
+        callMethodWithReply(_proxy, methodCall, _isLittleEndian, _info, _inArgs..., _callStatus, _outArgs...);
     }
 
-    template <typename Proxy_ = Proxy, typename AsyncCallback_>
+    template <typename Proxy_ = Proxy, typename DelegateFunction_>
     static std::future<CallStatus> callMethodAsync(
-                    const Proxy_ &_proxy,
+                    Proxy_ &_proxy,
                     const method_id_t _methodId,
-                    const bool _reliable,
+                    const bool _isReliable,
+                    const bool _isLittleEndian,
                     const CommonAPI::CallInfo *_info,
                     const InArgs_&... _inArgs,
-                    AsyncCallback_ _asyncCallback,
+                    DelegateFunction_ _function,
                     std::tuple<OutArgs_...> _outArgs) {
-#ifndef WIN32
-        static std::mutex callMethodAsync_mutex_;
-#endif
-        std::lock_guard<std::mutex> lock(callMethodAsync_mutex_);
-        Message methodCall = _proxy.createMethodCall(_methodId, _reliable);
-        return callMethodAsync(_proxy, methodCall, _info, _inArgs..., _asyncCallback, _outArgs);
+        Message methodCall = _proxy.createMethodCall(_methodId, _isReliable);
+        return callMethodAsync(_proxy, methodCall, _isLittleEndian, _info, _inArgs..., _function, _outArgs);
     }
 
-    template <typename Proxy_ = Proxy, typename AsyncCallback_>
+    template <typename Proxy_ = Proxy, typename DelegateFunction_>
     static std::future<CallStatus> callMethodAsync(
-                    const Proxy_ &_proxy,
+                    Proxy_ &_proxy,
                     Message &_message,
+                    const bool _isLittleEndian,
                     const CommonAPI::CallInfo *_info,
                     const InArgs_&... _inArgs,
-                    AsyncCallback_ _asyncCallback,
+                    DelegateFunction_ _function,
                     std::tuple<OutArgs_...> _outArgs) {
-        if (_proxy.isAvailable()) {
-            if (sizeof...(InArgs_) > 0) {
-                OutputStream outputStream(_message);
-                const bool success = SerializableArguments< InArgs_... >::serialize(outputStream, _inArgs...);
-                if (!success) {
-                    std::promise<CallStatus> promise;
-                    promise.set_value(CallStatus::OUT_OF_MEMORY);
-                    return promise.get_future();
-                }
-                outputStream.flush();
+        if (sizeof...(InArgs_) > 0) {
+            OutputStream outputStream(_message, _isLittleEndian);
+            const bool success = SerializableArguments< InArgs_... >::serialize(outputStream, _inArgs...);
+            if (!success) {
+                std::promise<CallStatus> promise;
+                promise.set_value(CallStatus::OUT_OF_MEMORY);
+                return promise.get_future();
             }
+            outputStream.flush();
+        }
 
+        typename ProxyAsyncCallbackHandler<
+                                Proxy, OutArgs_...
+                                >::Delegate delegate(_proxy.shared_from_this(), _function);
+        auto messageReplyAsyncHandler = ProxyAsyncCallbackHandler<
+                                            Proxy, OutArgs_...
+                                        >::create(delegate, _isLittleEndian, std::move(_outArgs)).release();
+
+        if (_proxy.isAvailable()) {
             return _proxy.getConnection()->sendMessageWithReplyAsync(
-                                               _message,
-                                               ProxyAsyncCallbackHandler<
-                                                   OutArgs_...
-                                               >::create(std::move(_asyncCallback), std::move(_outArgs)),
-                                               _info);
+                       _message,
+                       std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler),
+                       _info);
         } else {
-            CallStatus callStatus = CallStatus::NOT_AVAILABLE;
-            callCallbackForCallStatus(callStatus,
-                    _asyncCallback,
-                    typename make_sequence<sizeof...(OutArgs_)>::type(),
-                    _outArgs);
-            std::promise< CallStatus > promise;
-            promise.set_value(callStatus);
-            return promise.get_future();
+            //async isAvailable call with timeout
+            _proxy.isAvailableAsync([&_proxy, _message, _info,
+                                     _outArgs, messageReplyAsyncHandler, _function](
+                                             const AvailabilityStatus _status,
+                                             const Timeout_t remaining) {
+                if(_status == AvailabilityStatus::AVAILABLE) {
+                    //create new call info with remaining timeout. Minimal timeout is 100 ms.
+                    Timeout_t newTimeout = remaining;
+                    if(remaining < 100)
+                        newTimeout = 100;
+                    CallInfo newInfo(newTimeout);
+                    _proxy.getConnection()->sendMessageWithReplyAsync(
+                        _message,
+                        std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler),
+                        &newInfo);
+                } else {
+                    //create error message and push it directly to the connection
+                    Message message = _message.createErrorResponseMessage(vsomeip::return_code_e::E_NOT_REACHABLE);
+                    _proxy.getConnection()->proxyPushMessage(message,
+                            std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(messageReplyAsyncHandler));
+                }
+            }, _info);
+            return messageReplyAsyncHandler->getFuture();
         }
     }
 

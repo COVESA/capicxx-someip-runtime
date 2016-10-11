@@ -21,11 +21,10 @@ namespace SomeIP {
 const major_version_t DEFAULT_MAJOR_VERSION = vsomeip::DEFAULT_MAJOR;
 const minor_version_t DEFAULT_MINOR_VERSION = vsomeip::DEFAULT_MINOR;
 
-const CommonAPI::Timeout_t DEFAULT_SEND_TIMEOUT_MS = 5000;
 const ms_t ASYNC_MESSAGE_REPLY_TIMEOUT_MS = 5000;
 const ms_t ASYNC_MESSAGE_CLEANUP_INTERVAL_MS = 1000;
 
-static const CommonAPI::CallInfo defaultCallInfo(DEFAULT_SEND_TIMEOUT_MS);
+static const CommonAPI::CallInfo defaultCallInfo(CommonAPI::DEFAULT_SEND_TIMEOUT_MS);
 
 } // namespace SomeIP
 } // namespace CommonAPI

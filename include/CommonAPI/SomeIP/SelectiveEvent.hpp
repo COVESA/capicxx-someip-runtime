@@ -25,29 +25,36 @@ public:
             const eventgroup_id_t _eventgroupId,
             const event_id_t _eventId,
             bool _isField,
+            const bool _isLittleEndian,
             std::tuple<Arguments_...> _arguments)
-        : EventBase(_proxy, _eventgroupId, _eventId, _isField, _arguments) {
+        : EventBase(_proxy, _eventgroupId, _eventId, _isField, _isLittleEndian, _arguments) {
     }
 
     virtual ~SelectiveEvent() {}
 
+    virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
+        this->notifySpecificError(_tag, static_cast<CommonAPI::CallStatus>(_errorCode));
+    }
+
 protected:
     virtual void onFirstListenerAdded(const Listener&) {
-        Message message = this->proxy_.createMethodCall(0, false);
-        this->proxy_.sendIdentifyRequest(message);
-
-        // TODO: can we send both ID request calls here?!
-        message = this->proxy_.createMethodCall(0, true);
-                this->proxy_.sendIdentifyRequest(message);
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
-
         this->proxy_.addEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, false, this, major);
+                this->eventId_, false, this, major, true);
+    }
+
+    virtual void onListenerAdded(const Listener &_listener, const uint32_t _subscription) {
+        (void) _listener;
+        auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
+        this->proxy_.subscribeForSelective(this->serviceId_, this->instanceId_,
+                this->eventgroupId_, this, _subscription, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {
+        auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
+        auto minor = this->proxy_.getSomeIpAddress().getMinorVersion();
         this->proxy_.removeEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, this);
+                this->eventId_, this, major, minor);
     }
 };
 

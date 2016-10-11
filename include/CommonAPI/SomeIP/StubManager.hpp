@@ -31,6 +31,7 @@ class StubManager {
  private:
     std::weak_ptr<ProxyConnection> connection_;
     std::map<service_id_t, std::map<instance_id_t, std::shared_ptr<StubAdapter>>> registeredStubAdapters_;
+    std::recursive_mutex registeredStubAdaptersMutex_;
 };
 
 } // namespace SomeIP

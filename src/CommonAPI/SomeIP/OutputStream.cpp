@@ -9,18 +9,23 @@
 #include <arpa/inet.h>
 #endif
 
+#include <algorithm>
+#include <bitset>
+
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/Version.hpp>
 #include <CommonAPI/SomeIP/OutputStream.hpp>
 #include <CommonAPI/SomeIP/StringEncoder.hpp>
-#include <bitset>
 
 namespace CommonAPI {
 namespace SomeIP {
 
-OutputStream::OutputStream(Message message)
-    : message_(message),
-      errorOccurred_(false) {
+OutputStream::OutputStream(Message _message, bool _isLittleEndian)
+    : message_(_message),
+      errorOccurred_(false),
+      currentByte_(0),
+      currentBit_(0),
+      isLittleEndian_(_isLittleEndian) {
 }
 
 OutputStream::~OutputStream() {
@@ -42,47 +47,79 @@ size_t OutputStream::popPosition() {
 }
 
 OutputStream& OutputStream::writeValue(const bool &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return _writeBitValue(_value, 8, false);
 }
 
 OutputStream& OutputStream::writeValue(const int8_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<int8_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const int8_t &_value, const IntegerDeployment<int8_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 8), true);
 }
 
 OutputStream& OutputStream::writeValue(const int16_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<int16_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const int16_t &_value, const IntegerDeployment<int16_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 16), true);
 }
 
 OutputStream& OutputStream::writeValue(const int32_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<int32_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const int32_t &_value, const IntegerDeployment<int32_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 32), true);
 }
 
 OutputStream& OutputStream::writeValue(const int64_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<int64_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const int64_t &_value, const IntegerDeployment<int64_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 64), true);
 }
 
 OutputStream& OutputStream::writeValue(const uint8_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<uint8_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const uint8_t &_value, const IntegerDeployment<uint8_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 8), false);
 }
 
 OutputStream& OutputStream::writeValue(const uint16_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<uint16_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const uint16_t &_value, const IntegerDeployment<uint16_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 16), false);
 }
 
 OutputStream& OutputStream::writeValue(const uint32_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<int32_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const uint32_t &_value, const IntegerDeployment<uint32_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 32), false);
 }
 
 OutputStream& OutputStream::writeValue(const uint64_t &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return writeValue(_value, static_cast<const IntegerDeployment<uint64_t> *>(nullptr));
+}
+
+OutputStream& OutputStream::writeValue(const uint64_t &_value, const IntegerDeployment<uint64_t> *_depl) {
+    return _writeBitValue(_value, (_depl ? _depl->bits_ : 64), false);
 }
 
 OutputStream& OutputStream::writeValue(const float &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return _writeBitValue(_value, static_cast<uint8_t>((sizeof(float) << 3)), false);
 }
 
 OutputStream& OutputStream::writeValue(const double &_value, const EmptyDeployment *) {
-    return _writeValue(_value);
+    return _writeBitValue(_value, static_cast<uint8_t>((sizeof(double) << 3)), false);
 }
 
 OutputStream& OutputStream::_writeValue(const uint32_t &_value, const uint8_t &_width) {
@@ -91,19 +128,19 @@ OutputStream& OutputStream::_writeValue(const uint32_t &_value, const uint8_t &_
         if (_value > std::numeric_limits<uint8_t>::max()) {
             errorOccurred_ = true;
         }
-        _writeValue(static_cast<uint8_t>(_value));
+        _writeBitValue(static_cast<uint8_t>(_value), 8, false);
         break;
     case 2:
         if (_value > std::numeric_limits<uint16_t>::max()) {
             errorOccurred_ = true;
         }
-        _writeValue(static_cast<uint16_t>(_value));
+        _writeBitValue(static_cast<uint16_t>(_value), 16, false);
         break;
     case 4:
         if (_value > std::numeric_limits<uint32_t>::max()) {
             errorOccurred_ = true;
         }
-        _writeValue(static_cast<uint32_t>(_value));
+        _writeBitValue(static_cast<uint32_t>(_value), 32, false);
         break;
     }
 
@@ -136,10 +173,12 @@ OutputStream& OutputStream::_writeValueAt(const uint32_t &_value, const uint8_t 
 }
 
 OutputStream& OutputStream::writeValue(const std::string &_value, const EmptyDeployment *) {
+    bitAlign();
     return writeValue(_value, static_cast<const StringDeployment *>(nullptr));
 }
 
 OutputStream& OutputStream::writeValue(const std::string &_value, const StringDeployment *_depl) {
+    bitAlign();
 
     bool errorOccurred = false;
     size_t size, terminationSize(2);
@@ -170,7 +209,7 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
                 break;
         }
 
-        if(status != EncodingStatus::SUCCESS)
+        if (status != EncodingStatus::SUCCESS)
         {
             //TODO error handling
         }
@@ -217,6 +256,8 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
 }
 
 OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBufferDeployment *_depl) {
+    bitAlign();
+
     uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
 
@@ -234,7 +275,7 @@ OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBuffe
     if (!hasError()) {
         // Write array/vector content
         for (auto i : _value) {
-            writeValue(i, nullptr);
+            writeValue(i, static_cast<EmptyDeployment *>(nullptr));
             if (hasError()) {
                 break;
             }
@@ -250,8 +291,10 @@ OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBuffe
 }
 
 OutputStream& OutputStream::writeValue(const Version &_value, const EmptyDeployment *) {
-    _writeValue(_value.Major);
-    _writeValue(_value.Minor);
+    bitAlign();
+
+    _writeBitValue(_value.Major, static_cast<uint8_t>((sizeof(_value.Major) << 3)), false);
+    _writeBitValue(_value.Minor, static_cast<uint8_t>((sizeof(_value.Minor) << 3)), false);
     return (*this);
 }
 
@@ -263,13 +306,16 @@ bool OutputStream::hasError() const {
 static const byte_t eightByteZeroString[] = { 0 };
 
 void OutputStream::align(const size_t _boundary) {
-    assert(_boundary > 0 && _boundary <= 8 &&
-        (_boundary % 2 == 0 || _boundary == 1));
+    if ((_boundary > 0 && _boundary <= 8 &&
+        (_boundary % 2 == 0 || _boundary == 1))) {
 
-    size_t mask = _boundary - 1;
-    size_t necessary = ((mask - (payload_.size() & mask)) + 1) & mask;
+        size_t mask = _boundary - 1;
+        size_t necessary = ((mask - (payload_.size() & mask)) + 1) & mask;
 
-    _writeRaw(eightByteZeroString, necessary);
+        _writeRaw(eightByteZeroString, necessary);
+    } else {
+        COMMONAPI_ERROR("OutputStream::align invalid boundary: ", _boundary);
+    }
 }
 
 void OutputStream::_writeRaw(const byte_t &_data) {
@@ -302,10 +348,21 @@ void OutputStream::_writeBom(const StringDeployment *_depl) {
 }
 
 void OutputStream::flush() {
-    message_.setPayloadData((byte_t *)payload_.data(), uint32_t(payload_.size()));
-}
+    // Check whether last byte was already added
+    if (currentBit_ > 0) {
+        _writeRaw(currentByte_);
+        currentByte_ = 0x0;
+        currentBit_ = 0;
+    }
 
-void OutputStream::reserveMemory(size_t) {
+    if (isLittleEndian_) {
+        std::reverse(payload_.begin(), payload_.end());
+    }
+
+    message_.setPayloadData((byte_t *)payload_.data(), uint32_t(payload_.size()));
+
+    // clear
+    payload_.clear();
 }
 
 } // namespace SomeIP

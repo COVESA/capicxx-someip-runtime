@@ -9,6 +9,7 @@
 #include <vsomeip/constants.hpp>
 
 #define SOMEIP_ANY_METHOD       vsomeip::ANY_METHOD
+#define SOMEIP_ANY_MINOR_VERSION vsomeip::ANY_MINOR
 
 #define SOMEIP_MIN_SERVICE_ID   0x0001
 #define SOMEIP_MAX_SERVICE_ID   0xFFFD

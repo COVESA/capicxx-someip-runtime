@@ -7,20 +7,31 @@
 #include <arpa/inet.h>
 #endif
 
+#include <algorithm>
+#include <bitset>
+
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/InputStream.hpp>
 #include <CommonAPI/SomeIP/StringEncoder.hpp>
-#include <bitset>
 
 namespace CommonAPI {
 namespace SomeIP {
 
-InputStream::InputStream(const CommonAPI::SomeIP::Message& message)
-    : dataBegin_(message.getBodyData()),
-      current_(message.getBodyData()),
-      remaining_(message.getBodyLength()),
-      message_(message),
+InputStream::InputStream(const CommonAPI::SomeIP::Message &_message,
+        bool _isLittleEndian)
+    : dataBegin_(_message.getBodyData()),
+      current_(_message.getBodyData()),
+      currentBit_(0),
+      remaining_(_message.getBodyLength()),
+      message_(_message),
       errorOccurred_(false) {
+
+    if (_isLittleEndian) {
+        buffer_.assign(_message.getBodyData(), _message.getBodyData() + _message.getBodyLength());
+        std::reverse(buffer_.begin(), buffer_.end());
+        current_ = &buffer_[0];
+    }
+
 }
 
 InputStream::~InputStream() {}
@@ -33,58 +44,140 @@ void InputStream::align(const size_t) {
 }
 
 byte_t *InputStream::_readRaw(const size_t _size) {
-    assert(remaining_ >= _size);
+    if( _size > remaining_ )
+        errorOccurred_ = true;
+
+    if ( _size >= remaining_ )
+        remaining_ = 0;
+    else
+        remaining_ -= _size;
 
     byte_t *data = current_;
     current_ += _size;
-    remaining_ -= _size;
     return data;
 }
 
 InputStream& InputStream::readValue(bool &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    errorOccurred_ = _readBitValue(_value, 8, false);
     return (*this);
 }
+
 InputStream& InputStream::readValue(int8_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<int8_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(int8_t &_value, const IntegerDeployment<int8_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 8), true);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(int16_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<int16_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(int16_t &_value, const IntegerDeployment<int16_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 16), true);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(int32_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<int32_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(int32_t &_value, const IntegerDeployment<int32_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 32), true);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(int64_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<int64_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(int64_t &_value, const IntegerDeployment<int64_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 64), true);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(uint8_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<uint8_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(uint8_t &_value, const IntegerDeployment<uint8_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 8), false);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(uint16_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<uint16_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(uint16_t &_value, const IntegerDeployment<uint16_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 16), false);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(uint32_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<uint32_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(uint32_t &_value, const IntegerDeployment<uint32_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 32), false);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(uint64_t &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    return readValue(_value, static_cast<const IntegerDeployment<uint64_t> *>(nullptr));
+}
+
+InputStream& InputStream::readValue(uint64_t &_value, const IntegerDeployment<uint64_t> *_depl) {
+    errorOccurred_ = _readBitValue(_value, (_depl ? _depl->bits_ : 64), false);
+    if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+        _value = _depl->invalid_;
+        errorOccurred_ = false;
+    }
     return (*this);
 }
+
 InputStream& InputStream::readValue(float &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    bitAlign();
+    errorOccurred_ = _readBitValue(_value, 32, false);
     return (*this);
 }
+
 InputStream& InputStream::readValue(double &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readValue(_value);
+    bitAlign();
+    errorOccurred_ = _readBitValue(_value, 64, false);
     return (*this);
 }
+
 InputStream& InputStream::readValue(uint32_t &_value, const uint8_t &_width, const bool &_permitZeroWidth) {
     switch (_width) {
     case 0:
@@ -97,19 +190,19 @@ InputStream& InputStream::readValue(uint32_t &_value, const uint8_t &_width, con
     case 1:
         {
             uint8_t temp;
-            _readValue(temp);
+            _readBitValue(temp, 8, false);
             _value = temp;
         }
         break;
     case 2:
         {
             uint16_t temp;
-            _readValue(temp);
+            _readBitValue(temp, 16, false);
             _value = temp;
         }
         break;
     case 4:
-        _readValue(_value);
+        _readBitValue(_value, 32, false);
         break;
     default:
         errorOccurred_ = true;
@@ -119,10 +212,13 @@ InputStream& InputStream::readValue(uint32_t &_value, const uint8_t &_width, con
 }
 
 InputStream& InputStream::readValue(std::string &_value, const EmptyDeployment *) {
+    bitAlign();
     return readValue(_value, static_cast<const StringDeployment*>(nullptr));
 }
 
 InputStream& InputStream::readValue(std::string &_value, const StringDeployment *_depl) {
+    bitAlign();
+
     uint32_t itsSize(0);
 
     // Read string size
@@ -136,7 +232,7 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
         readValue(itsSize, 4, false);
     }
 
-    if(itsSize > remaining_) {
+    if (itsSize > remaining_) {
         errorOccurred_ = true;
     }
 
@@ -157,21 +253,34 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
                 switch (_depl->stringEncoding_)
                 {
                     case StringEncoding::UTF16BE:
-                        //TODO do not return error if itsSize is odd and itsSize is too short
-                        if(itsSize % 2 != 0 && data[itsSize - 1] == 0x00 && data[itsSize - 2] == 0x00 )
-                            errorOccurred_ = true;
+                        while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
+                        	itsSize--;
+
+                        if (itsSize % 2 != 0) {
+                        	errorOccurred_ = true;
+                        }
+
                         if(!hasError())
                             encoder->utf16To8((byte_t *) data, BIG_ENDIAN, itsSize - 2, status, &bytes, length);
                         break;
 
                     case StringEncoding::UTF16LE:
-                        if(itsSize % 2 != 0 && data[itsSize - 1] == 0x00 && data[itsSize - 2] == 0x00 )
-                            errorOccurred_ = true;
+                        while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
+                        	itsSize--;
+
+                        if (itsSize % 2 != 0) {
+                        	errorOccurred_ = true;
+                        }
+
                         if(!hasError())
                             encoder->utf16To8((byte_t *) data, LITTLE_ENDIAN, itsSize - 2, status, &bytes, length);
                         break;
 
                     default:
+                        if (data[itsSize - 1] != 0x00) {
+                            errorOccurred_ = true;
+                        }
+
                         bytes = (byte_t *) data;
                         break;
                 }
@@ -181,13 +290,16 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
                 status = EncodingStatus::INVALID_BOM;
             }
 
-            if(status != EncodingStatus::SUCCESS)
+            if (status != EncodingStatus::SUCCESS)
             {
                 errorOccurred_ = true;
             }
-        } else
-        {
+        } else {
             if (encoder->checkBom(data, itsSize, StringEncoding::UTF8)) {
+                if (data[itsSize - 1] != 0x00) {
+                    errorOccurred_ = true;
+                }
+
                 bytes = new byte_t[itsSize];
                 memcpy(bytes, (byte_t *) data, itsSize);
             }
@@ -209,6 +321,8 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
 }
 
 InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployment *_depl) {
+    bitAlign();
+
     uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
 
@@ -226,7 +340,7 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
             size_t remainingBeforeRead = remaining_;
 
             uint8_t itsElement;
-            readValue(itsElement, nullptr);
+            readValue(itsElement, static_cast<const IntegerDeployment<uint8_t> *>(nullptr));
             if (hasError()) {
                 break;
             }
@@ -248,8 +362,10 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
 }
 
 InputStream& InputStream::readValue(Version &_value, const EmptyDeployment *) {
-    _readValue(_value.Major);
-    _readValue(_value.Minor);
+    bitAlign();
+
+    _readBitValue(_value.Major, 32, false);
+    _readBitValue(_value.Minor, 32, false);
     return *this;
 }
 

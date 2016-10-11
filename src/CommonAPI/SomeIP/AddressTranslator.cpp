@@ -25,6 +25,10 @@ namespace SomeIP {
 const char *COMMONAPI_SOMEIP_DEFAULT_CONFIG_FILE = "commonapi-someip.ini";
 const char *COMMONAPI_SOMEIP_DEFAULT_CONFIG_FOLDER = "/etc/";
 
+#ifdef WIN32
+CRITICAL_SECTION critSec;
+#endif
+
 std::shared_ptr<AddressTranslator> AddressTranslator::get() {
     static std::shared_ptr<AddressTranslator> theTranslator
         = std::make_shared<AddressTranslator>();
@@ -37,6 +41,9 @@ AddressTranslator::AddressTranslator() {
 
 void
 AddressTranslator::init() {
+#ifdef WIN32
+    InitializeCriticalSection(&critSec);
+#endif
     // Determine default configuration file
     const char *config = getenv("COMMONAPI_SOMEIP_CONFIG");
     if (config) {
@@ -50,6 +57,13 @@ AddressTranslator::init() {
     (void)readConfiguration();
 }
 
+AddressTranslator::~AddressTranslator()
+{
+#ifdef WIN32
+    DeleteCriticalSection(&critSec);
+#endif
+}
+
 bool
 AddressTranslator::translate(const std::string &_key, Address &_value) {
     return translate(CommonAPI::Address(_key), _value);
@@ -58,8 +72,11 @@ AddressTranslator::translate(const std::string &_key, Address &_value) {
 bool
 AddressTranslator::translate(const CommonAPI::Address &_key, Address &_value) {
     bool result(true);
+#ifdef WIN32
+    EnterCriticalSection(&critSec);
+#else
     std::lock_guard<std::mutex> itsLock(mutex_);
-
+#endif
     const auto it = forwards_.find(_key);
     if (it != forwards_.end()) {
         _value = it->second;
@@ -69,6 +86,9 @@ AddressTranslator::translate(const CommonAPI::Address &_key, Address &_value) {
             "CommonAPI address \"", _key, "\"");
         result = false;
     }
+#ifdef WIN32
+    LeaveCriticalSection(&critSec);
+#endif
     return result;
 }
 
@@ -83,8 +103,11 @@ AddressTranslator::translate(const Address &_key, std::string &_value) {
 bool
 AddressTranslator::translate(const Address &_key, CommonAPI::Address &_value) {
     bool result(true);
+#ifdef WIN32
+    EnterCriticalSection(&critSec);
+#else
     std::lock_guard<std::mutex> itsLock(mutex_);
-
+#endif
     const auto it = backwards_.find(_key);
     if (it != backwards_.end()) {
         _value = it->second;
@@ -94,6 +117,9 @@ AddressTranslator::translate(const Address &_key, CommonAPI::Address &_value) {
             "SOME/IP address \"", _key, "\"");
         result = false;
     }
+#ifdef WIN32
+    LeaveCriticalSection(&critSec);
+#endif
     return result;
 }
 
@@ -105,8 +131,11 @@ AddressTranslator::insert(
     if (isValidService(_service) && isValidInstance(_instance)) {
         CommonAPI::Address address(_address);
         Address someipAddress(_service, _instance, _major, _minor);
-
+#ifdef WIN32
+        EnterCriticalSection(&critSec);
+#else
         std::lock_guard<std::mutex> itsLock(mutex_);
+#endif
         auto fw = forwards_.find(address);
         auto bw = backwards_.find(someipAddress);
         if (fw == forwards_.end() && bw == backwards_.end()) {
@@ -123,6 +152,9 @@ AddressTranslator::insert(
                     "already mapped to a SomeIP address: ",
                     _address, " <--> ", someipAddress);
         }
+#ifdef WIN32
+    LeaveCriticalSection(&critSec);
+#endif
     }
 }
 
@@ -175,13 +207,15 @@ AddressTranslator::readConfiguration() {
         converter >> instance;
 
         major_version_t major_version(0);
+        std::uint32_t major_temp(0);
         minor_version_t minor_version(0);
 
         std::string majorEntry = itsMapping.second->getValue("major");
         converter.str("");
         converter.clear();
         converter << std::dec << majorEntry;
-        converter >> major_version;
+        converter >> major_temp;
+        major_version = static_cast<std::uint8_t>(major_temp);
 
         std::string minorEntry = itsMapping.second->getValue("minor");
         converter.str("");

@@ -25,7 +25,7 @@ namespace SomeIP {
 
 class Address;
 
-class ProxyBase
+class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
         : public virtual CommonAPI::Proxy {
  public:
      COMMONAPI_EXPORT ProxyBase(const std::shared_ptr<ProxyConnection> &connection);
@@ -37,7 +37,10 @@ class ProxyBase
 
     COMMONAPI_EXPORT Message createMethodCall(const method_id_t methodId, bool _reliable) const;
 
-    COMMONAPI_EXPORT void sendIdentifyRequest(Message& message);
+    typedef std::function<void(const AvailabilityStatus, const Timeout_t remaining)> isAvailableAsyncCallback;
+    COMMONAPI_EXPORT virtual std::future<AvailabilityStatus> isAvailableAsync(
+            isAvailableAsyncCallback _callback,
+            const CallInfo *_info) const = 0;
 
     COMMONAPI_EXPORT void addEventHandler(
             service_id_t serviceId,
@@ -46,24 +49,34 @@ class ProxyBase
             event_id_t eventId,
             bool isField,
             ProxyConnection::EventHandler* eventHandler,
-            major_version_t major);
+            major_version_t major,
+            bool isSelective = false);
 
     COMMONAPI_EXPORT void removeEventHandler(
             service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler);
+            ProxyConnection::EventHandler* eventHandler,
+            major_version_t major,
+            minor_version_t minor);
 
-    COMMONAPI_EXPORT void getInitialEvent(
-            service_id_t _service,
-            instance_id_t _instance,
-            Message _message,
-            ProxyConnection::EventHandler *eventHandler,
-            uint32_t _tag);
+    COMMONAPI_EXPORT virtual void getInitialEvent(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            eventgroup_id_t eventGroupId,
+            event_id_t eventId,
+            major_version_t major) = 0;
 
+    COMMONAPI_EXPORT void subscribeForSelective(
+             service_id_t serviceId,
+             instance_id_t instanceId,
+             eventgroup_id_t eventGroupId,
+             ProxyConnection::EventHandler* eventHandler,
+             uint32_t _tag,
+             major_version_t major);
 
-    COMMONAPI_EXPORT virtual void init() = 0;
+    COMMONAPI_EXPORT virtual bool init() = 0;
 
  protected:
     const std::string commonApiDomain_;
@@ -72,6 +85,8 @@ class ProxyBase
     ProxyBase(const ProxyBase&) = delete;
 
     std::shared_ptr<ProxyConnection> connection_;
+
+    std::set<event_id_t> eventHandlerAdded_;
 };
 
 const std::shared_ptr< ProxyConnection >& ProxyBase::getConnection() const {

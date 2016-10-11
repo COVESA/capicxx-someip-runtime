@@ -27,7 +27,7 @@ namespace SomeIP {
 class ObjectManagerStub;
 class Factory;
 
-class StubAdapter: virtual public CommonAPI::StubAdapter, public InterfaceHandler {
+class COMMONAPI_EXPORT_CLASS_EXPLICIT StubAdapter: virtual public CommonAPI::StubAdapter, public InterfaceHandler {
  public:
      COMMONAPI_EXPORT StubAdapter(const Address &_address,
                 const std::shared_ptr<ProxyConnection> &_connection);

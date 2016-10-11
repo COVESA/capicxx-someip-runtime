@@ -10,6 +10,8 @@
 #ifndef COMMONAPI_SOMEIP_PROXY_HPP_
 #define COMMONAPI_SOMEIP_PROXY_HPP_
 
+#include <list>
+
 #include <CommonAPI/Export.hpp>
 #include <CommonAPI/SomeIP/Address.hpp>
 #include <CommonAPI/SomeIP/ProxyBase.hpp>
@@ -28,6 +30,7 @@ class ProxyStatusEventHelper: public ProxyStatusEvent {
 
  protected:
     virtual void onListenerAdded(const Listener &_listener, const Subscription subscription);
+    virtual void onNotifySpecificListener(uint32_t subscription);
 
     Proxy *proxy_;
 };
@@ -35,7 +38,7 @@ class ProxyStatusEventHelper: public ProxyStatusEvent {
 class Factory;
 class ProxyConnection;
 
-class Proxy
+class COMMONAPI_EXPORT_CLASS_EXPLICIT Proxy
         : public ProxyBase,
           public std::enable_shared_from_this<Proxy> {
 public:
@@ -43,20 +46,32 @@ public:
           const std::shared_ptr<ProxyConnection> &_connection, bool hasSelective = false);
     COMMONAPI_EXPORT virtual ~Proxy();
 
-    COMMONAPI_EXPORT void init();
+    COMMONAPI_EXPORT bool init();
 
     COMMONAPI_EXPORT virtual const Address &getSomeIpAddress() const;
 
     COMMONAPI_EXPORT virtual bool isAvailable() const;
     COMMONAPI_EXPORT virtual bool isAvailableBlocking() const;
+    COMMONAPI_EXPORT virtual std::future<AvailabilityStatus> isAvailableAsync(
+                isAvailableAsyncCallback _callback,
+                const CallInfo *_info) const;
+
+    COMMONAPI_EXPORT AvailabilityStatus getAvailabilityStatus() const;
 
     COMMONAPI_EXPORT virtual ProxyStatusEvent& getProxyStatusEvent();
     COMMONAPI_EXPORT virtual InterfaceVersionAttribute& getInterfaceVersionAttribute();
+
+    COMMONAPI_EXPORT virtual void getInitialEvent(
+            service_id_t serviceId, instance_id_t instanceId,
+            eventgroup_id_t eventGroupId, event_id_t eventId,
+            major_version_t major);
 
 private:
     COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
 
     COMMONAPI_EXPORT void onServiceInstanceStatus(uint16_t serviceId, uint16_t instanceId, bool isAvailbale);
+
+    COMMONAPI_EXPORT void availabilityTimeoutThreadHandler() const;
 
 private:
     Address address_;
@@ -71,6 +86,18 @@ private:
     mutable std::condition_variable availabilityCondition_;
 
     bool hasSelectiveEvents_;
+
+    mutable std::shared_ptr<std::thread> availabilityTimeoutThread_;
+    mutable std::mutex availabilityTimeoutThreadMutex_;
+    mutable std::mutex timeoutsMutex_;
+    mutable std::condition_variable availabilityTimeoutCondition_;
+
+    typedef std::tuple<
+                std::chrono::time_point<std::chrono::high_resolution_clock>,
+                isAvailableAsyncCallback,
+                std::promise<AvailabilityStatus>
+                > AvailabilityTimeout_t;
+    mutable std::list<AvailabilityTimeout_t> timeouts_;
 };
 
 } // namespace SomeIP

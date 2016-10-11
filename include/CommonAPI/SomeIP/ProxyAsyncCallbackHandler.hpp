@@ -22,19 +22,32 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-template < typename ... ArgTypes_ >
+template <typename DelegateObjectType_, typename ... ArgTypes_ >
 class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandler {
  public:
-    typedef std::function< void(CallStatus, ArgTypes_...) > FunctionType;
 
-    static std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > create(FunctionType &&callback, std::tuple< ArgTypes_... >&& _argTuple) {
+    struct Delegate {
+        typedef std::function< void(CallStatus, ArgTypes_...) > FunctionType;
+
+        Delegate(std::shared_ptr<DelegateObjectType_> object, FunctionType function) :
+            function_(std::move(function)) {
+            object_ = object;
+        }
+        std::weak_ptr<DelegateObjectType_> object_;
+        FunctionType function_;
+    };
+
+    static std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler > create(
+            Delegate &delegate, bool _isLittleEndian, std::tuple< ArgTypes_... >&& _argTuple) {
         return std::unique_ptr< ProxyConnection::MessageReplyAsyncHandler >(
-                new ProxyAsyncCallbackHandler(std::move(callback), std::move(_argTuple)));
+                new ProxyAsyncCallbackHandler<DelegateObjectType_, ArgTypes_...>(
+                        std::move(delegate), _isLittleEndian, std::move(_argTuple)));
     }
 
     ProxyAsyncCallbackHandler() = delete;
-    ProxyAsyncCallbackHandler(FunctionType&& callback, std::tuple< ArgTypes_... >&& _argTuple):
-        callback_(std::move(callback)),
+    ProxyAsyncCallbackHandler(Delegate&& delegate, bool _isLittleEndian, std::tuple< ArgTypes_... >&& _argTuple):
+        delegate_(std::move(delegate)),
+        isLittleEndian_(_isLittleEndian),
         argTuple_(std::move(_argTuple)) {
     }
 
@@ -48,16 +61,12 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
 
  private:
     template < int... ArgIndices_ >
-    inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< ArgIndices_... >) const {
+    inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< ArgIndices_... >) {
         CallStatus callStatus = _callStatus;
-        std::tuple< ArgTypes_... > argTuple = argTuple_;
-
-        (void) argTuple;
-
         if (callStatus == CallStatus::SUCCESS) {
             if (!message.isErrorType()) {
-                InputStream inputStream(message);
-                const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple)...);
+                InputStream inputStream(message, isLittleEndian_);
+                const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple_)...);
                 if (!success) {
                     callStatus = CallStatus::REMOTE_ERROR;
                 }
@@ -66,12 +75,16 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
             }
         }
 
-        callback_(callStatus, std::move(std::get< ArgIndices_ >(argTuple))...);
+        //check if object is expired
+        if(!delegate_.object_.expired())
+            delegate_.function_(callStatus, std::move(std::get< ArgIndices_ >(argTuple_))...);
+
         return callStatus;
     }
 
     std::promise< CallStatus > promise_;
-    const FunctionType callback_;
+    const Delegate delegate_;
+    bool isLittleEndian_;
     std::tuple< ArgTypes_... > argTuple_;
 };
 

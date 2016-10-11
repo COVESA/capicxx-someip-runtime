@@ -26,11 +26,13 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-class ProxyManager: public CommonAPI::ProxyManager {
+class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyManager: public CommonAPI::ProxyManager {
 public:
     COMMONAPI_EXPORT ProxyManager(Proxy &_proxy,
                      const std::string &_interfaceName,
                      const service_id_t &_serviceId);
+
+    COMMONAPI_EXPORT ~ProxyManager();
 
     COMMONAPI_EXPORT const std::string &getDomain() const;
     COMMONAPI_EXPORT const std::string &getInterface() const;
@@ -53,6 +55,8 @@ private:
     Proxy &proxy_;
     const std::string interfaceId_;
     std::shared_ptr<CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent> instanceAvailabilityStatusEvent_;
+    AvailabilityHandlerId_t availabilityHandlerId_;
+    service_id_t observedInterfaceServiceId_;
 };
 
 } // namespace SomeIP

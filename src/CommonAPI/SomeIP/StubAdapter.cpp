@@ -7,6 +7,7 @@
 #include <CommonAPI/Types.hpp>
 #include <CommonAPI/Utils.hpp>
 #include <CommonAPI/SomeIP/StubAdapter.hpp>
+#include <CommonAPI/SomeIP/Factory.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -14,14 +15,16 @@ namespace SomeIP {
 StubAdapter::StubAdapter(const Address &_someipAddress,
                          const std::shared_ptr<ProxyConnection> &_connection)
     : someipAddress_(_someipAddress), connection_(_connection) {
+    Factory::get()->incrementConnection(getConnection());
 }
 
 StubAdapter::~StubAdapter() {
-    deinit();
+    Factory::get()->decrementConnection(getConnection());
 }
 
 void
-StubAdapter::init(std::shared_ptr< StubAdapter >) {
+StubAdapter::init(std::shared_ptr<StubAdapter> instance) {
+    (void) instance;
 }
 
 void

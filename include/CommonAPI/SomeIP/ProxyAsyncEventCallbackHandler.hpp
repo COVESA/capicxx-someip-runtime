@@ -16,22 +16,33 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+template <typename DelegateObjectType_>
 class ProxyAsyncEventCallbackHandler: public ProxyConnection::MessageReplyAsyncHandler {
  public:
-    typedef std::function< void(CallStatus, Message, ProxyConnection::EventHandler*, uint32_t) > FunctionType;
+
+    struct Delegate {
+        typedef std::function< void(CallStatus, Message, ProxyConnection::EventHandler*, uint32_t) > FunctionType;
+
+         Delegate(std::shared_ptr<DelegateObjectType_> object, FunctionType function) :
+             function_(std::move(function)) {
+             object_ = object;
+         }
+         std::weak_ptr<DelegateObjectType_> object_;
+         FunctionType function_;
+     };
 
     static std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler> create(
-            FunctionType& callback, ProxyConnection::EventHandler *_eventHandler,
+            Delegate& delegate, ProxyConnection::EventHandler *_eventHandler,
             const uint32_t tag) {
         return std::unique_ptr<ProxyConnection::MessageReplyAsyncHandler>(
-                new ProxyAsyncEventCallbackHandler(std::move(callback), _eventHandler, tag));
+                new ProxyAsyncEventCallbackHandler<DelegateObjectType_>(std::move(delegate), _eventHandler, tag));
     }
 
     ProxyAsyncEventCallbackHandler() = delete;
-    ProxyAsyncEventCallbackHandler(FunctionType&& callback,
+    ProxyAsyncEventCallbackHandler(Delegate&& delegate,
             ProxyConnection::EventHandler *_eventHandler,
             const uint32_t tag):
-        callback_(std::move(callback)), eventHandler_(_eventHandler), tag_(tag) {
+        delegate_(std::move(delegate)), eventHandler_(_eventHandler), tag_(tag) {
     }
 
     virtual std::future< CallStatus > getFuture() {
@@ -46,12 +57,15 @@ class ProxyAsyncEventCallbackHandler: public ProxyConnection::MessageReplyAsyncH
     inline CallStatus handleMessageReply(const CallStatus callStatus, const Message& message) const {
         CallStatus status = callStatus;
 
-        callback_(status, message, eventHandler_, tag_);
+        //check if object is expired
+        if(!delegate_.object_.expired())
+            delegate_.function_(status, message, eventHandler_, tag_);
+
         return status;
     }
 
     std::promise< CallStatus > promise_;
-    const FunctionType callback_;
+    const Delegate delegate_;
     ProxyConnection::EventHandler *eventHandler_;
     const uint32_t tag_;
 };

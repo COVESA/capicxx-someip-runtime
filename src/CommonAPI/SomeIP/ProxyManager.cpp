@@ -16,7 +16,26 @@ ProxyManager::ProxyManager(Proxy &_proxy, const std::string &_interfaceName,
     instanceAvailabilityStatusEvent_(
             std::make_shared<
                     CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent>(
-                    _proxy, _interfaceName, _serviceId)) {
+                    _interfaceName)),
+    availabilityHandlerId_(0),
+    observedInterfaceServiceId_(_serviceId) {
+
+    std::function<void(service_id_t, instance_id_t, bool)> availabilityHandler =
+            std::bind(
+                    &CommonAPI::SomeIP::InstanceAvailabilityStatusChangedEvent::onServiceInstanceStatus,
+                    instanceAvailabilityStatusEvent_, std::placeholders::_1, std::placeholders::_2,
+                    std::placeholders::_3);
+    Address wildcardAddress(_serviceId, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+
+    availabilityHandlerId_ = proxy_.getConnection()->registerAvailabilityHandler(
+                                wildcardAddress, availabilityHandler);
+}
+
+ProxyManager::~ProxyManager() {
+    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE,  vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+
+    proxy_.getConnection()->unregisterAvailabilityHandler(
+            wildcardAddress, availabilityHandlerId_);
 }
 
 const std::string &

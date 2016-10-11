@@ -47,6 +47,7 @@ class ProxyConnection {
         virtual ~EventHandler() { }
         virtual void onEventMessage(const Message&) = 0;
         virtual void onInitialValueEventMessage(const Message &, const uint32_t) {};
+        virtual void onError(const uint16_t, const uint32_t) {};
     };
 
     typedef std::tuple< service_id_t, instance_id_t, eventgroup_id_t, event_id_t > EventHandlerIds;
@@ -87,14 +88,26 @@ class ProxyConnection {
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
             ProxyConnection::EventHandler* eventHandler,
-            major_version_t major) = 0;
+            major_version_t major,
+            bool isField,
+            bool isSelective = false) = 0;
 
     virtual void removeEventHandler(
             service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler) = 0;
+            ProxyConnection::EventHandler* eventHandler,
+            major_version_t major,
+            minor_version_t minor) = 0;
+
+    virtual void subscribeForSelective(
+                 service_id_t serviceId,
+                 instance_id_t instanceId,
+                 eventgroup_id_t eventGroupId,
+                 ProxyConnection::EventHandler* eventHandler,
+                 uint32_t _tag,
+                 major_version_t major) = 0;
 
     virtual bool isAvailable(const Address &_address) = 0;
 
@@ -114,6 +127,8 @@ class ProxyConnection {
 
     virtual void requestService(const Address &_address, bool _hasSelective = false) = 0;
 
+    virtual void releaseService(const Address &_address) = 0;
+
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) = 0;
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
@@ -128,12 +143,21 @@ class ProxyConnection {
     virtual void setStubMessageHandler(std::function<bool(const Message&)> stubMessageHandler) = 0;
     virtual bool isStubMessageHandlerSet() = 0;
 
-    virtual void sendPendingSubscriptions(service_id_t serviceId,
-                                          instance_id_t instanceId,
-                                          major_version_t major) = 0;
+    virtual void queueSelectiveErrorHandler(service_id_t serviceId,
+                                          instance_id_t instanceId) = 0;
 
-    virtual void getInitialEvent(service_id_t _service, instance_id_t _instance, Message _message,
-            EventHandler *_eventHandler, uint32_t _tag) = 0;
+    virtual void getInitialEvent(service_id_t serviceId,
+                                 instance_id_t instanceId,
+                                 eventgroup_id_t eventGroupId,
+                                 event_id_t eventId,
+                                 major_version_t major) = 0;
+
+    virtual void proxyPushMessage(const Message &_message,
+                                  std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler) = 0;
+
+    virtual void proxyPushFunction(std::function<void(const uint32_t)> _function, uint32_t _value) = 0;
+
+    virtual const ConnectionId_t& getConnectionId() = 0;
 };
 
 

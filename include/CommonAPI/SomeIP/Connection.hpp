@@ -16,6 +16,7 @@
 #include <vsomeip/application.hpp>
 
 #include <CommonAPI/MainLoopContext.hpp>
+#include <CommonAPI/SomeIP/Proxy.hpp>
 #include <CommonAPI/SomeIP/ProxyConnection.hpp>
 #include <CommonAPI/SomeIP/StubManager.hpp>
 #include <CommonAPI/SomeIP/DispatchSource.hpp>
@@ -61,11 +62,16 @@ public:
 
     void addEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler, major_version_t major);
+            ProxyConnection::EventHandler* eventHandler, major_version_t major,
+            bool isField, bool isSelective);
 
     void removeEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            ProxyConnection::EventHandler* eventHandler);
+            ProxyConnection::EventHandler* eventHandler,  major_version_t major, minor_version_t minor);
+
+    void subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
+            eventgroup_id_t eventGroupId, ProxyConnection::EventHandler* eventHandler,
+			uint32_t _tag, major_version_t major);
 
     virtual bool attachMainLoopContext(std::weak_ptr<MainLoopContext>);
 
@@ -87,6 +93,8 @@ public:
     virtual void requestService(const Address &_address, bool _hasSelective =
             false);
 
+    virtual void releaseService(const Address &_address);
+
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField);
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
@@ -101,16 +109,28 @@ public:
     virtual void setStubMessageHandler(MessageHandler_t stubMessageHandler);
     virtual bool isStubMessageHandlerSet();
 
-    virtual void processMsgQueueEntry(Watch::msgQueueEntry &_msgQueueEntry);
+    virtual void processMsgQueueEntry(Watch::MsgQueueEntry &_msgQueueEntry);
+    virtual void processAvblQueueEntry(Watch::AvblQueueEntry &_avblQueueEntry);
+    virtual void processFunctionQueueEntry(Watch::FunctionQueueEntry &_functionQueueEntry);
 
     virtual const ConnectionId_t& getConnectionId();
 
-    virtual void sendPendingSubscriptions(service_id_t serviceId,
-            instance_id_t instanceId, major_version_t major);
+    virtual void queueSelectiveErrorHandler(service_id_t serviceId,
+                                              instance_id_t instanceId);
 
-    virtual void getInitialEvent(service_id_t _service, instance_id_t _instance,
-            Message _message, EventHandler *_eventHandler,
-            uint32_t tag);
+    virtual void getInitialEvent(service_id_t serviceId,
+                                 instance_id_t instanceId,
+                                 eventgroup_id_t eventGroupId,
+                                 event_id_t eventId,
+                                 major_version_t major);
+
+    virtual void incrementConnection();
+    virtual void decrementConnection();
+
+    virtual void proxyPushMessage(const Message &_message,
+                                  std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler);
+
+    virtual void proxyPushFunction(std::function<void(const uint32_t)> _function, uint32_t _value);
 
 private:
     void proxyReceive(const std::shared_ptr<vsomeip::message> &_message);
@@ -120,6 +140,8 @@ private:
     void onConnectionEvent(state_type_e _state);
     void onAvailabilityChange(service_id_t _service, instance_id_t _instance,
             bool _is_available);
+    void handleAvailabilityChange(const service_id_t _service, const instance_id_t _instance,
+                                  bool _is_available);
     void dispatch();
     void cleanup();
 
@@ -127,12 +149,15 @@ private:
                 const Message& message, EventHandler *_eventHandler,
                 const uint32_t tag);
 
+    void addSelectiveErrorListener(service_id_t serviceId,
+            instance_id_t instanceId,
+            eventgroup_id_t eventGroupId);
+
     std::thread* dispatchThread_;
 
     std::weak_ptr<MainLoopContext> mainLoopContext_;
-    std::shared_ptr<DispatchSource> dispatchSource_;
-    std::shared_ptr<Watch> watch_;
-    bool executeEndlessPoll;
+    DispatchSource* dispatchSource_;
+    Watch* watch_;
 
     ConnectionStatusEvent connectionStatusEvent_;
 
@@ -147,9 +172,8 @@ private:
     std::shared_ptr<vsomeip::application> application_;
 
     mutable std::mutex sendAndBlockMutex_;
-    mutable std::pair<session_id_t, Message> sendAndBlockAnswer_;
+    mutable std::map<session_id_t, Message> sendAndBlockAnswers_;
     mutable std::condition_variable sendAndBlockCondition_;
-    mutable bool sendAndBlockWait_;
 
     std::shared_ptr<std::thread> asyncAnswersCleanupThread_;
     std::mutex cleanupMutex_;
@@ -178,12 +202,26 @@ private:
     availability_map_t availabilityHandlers_;
 
     typedef std::map<service_id_t,
-            std::map<instance_id_t, std::set<eventgroup_id_t> > > subscriptions_map_t;
+                std::map<instance_id_t,
+                    std::map<event_id_t, std::set<eventgroup_id_t> > > > subscriptions_map_t;
     subscriptions_map_t subscriptions_;
 
     typedef std::tuple<Message, ProxyConnection::EventHandler*, uint32_t> inital_event_tuple_t;
     std::map<service_id_t,
                 std::map<instance_id_t, std::vector<inital_event_tuple_t> > > inital_event_requests;
+
+    uint32_t activeConnections_;
+    std::mutex activeConnectionsMutex_;
+
+    std::map<service_id_t,
+        std::map<instance_id_t,
+            std::map<eventgroup_id_t,
+                std::queue<std::pair<ProxyConnection::EventHandler*, std::set<uint32_t>>>>>> selectiveErrorHandlers_;
+
+    std::map<service_id_t,
+        std::map<instance_id_t,
+            std::map<eventgroup_id_t,
+                std::map<ProxyConnection::EventHandler*, std::set<uint32_t>>>>> pendingSelectiveErrorHandlers_;
 };
 
 } // namespace SomeIP

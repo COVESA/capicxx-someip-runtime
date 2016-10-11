@@ -27,8 +27,9 @@ void StubManager::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();
 
-    connection->registerService(itsAddress);
+    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
     registeredStubAdapters_[service][instance] = _adapter;
+    connection->registerService(itsAddress);
 }
 
 void StubManager::unregisterStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
@@ -37,6 +38,7 @@ void StubManager::unregisterStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();
 
+    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
     auto foundService = registeredStubAdapters_.find(service);
     if(foundService != registeredStubAdapters_.end()) {
         auto foundInstance = foundService->second.find(instance);
@@ -48,6 +50,7 @@ void StubManager::unregisterStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
 }
 
 bool StubManager::handleMessage(const Message &_message) {
+    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
     auto foundService = registeredStubAdapters_.find(_message.getServiceId());
     if(foundService != registeredStubAdapters_.end()) {
         auto foundInstance = foundService->second.find(_message.getInstanceId());

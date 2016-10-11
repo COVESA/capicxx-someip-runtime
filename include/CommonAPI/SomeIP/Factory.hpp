@@ -10,6 +10,7 @@
 #ifndef COMMONAPI_SOMEIP_FACTORY_HPP_
 #define COMMONAPI_SOMEIP_FACTORY_HPP_
 
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -31,6 +32,8 @@ class Proxy;
 class ProxyConnection;
 class StubAdapter;
 
+typedef void (*InterfaceInitFunction)(void);
+
 typedef std::shared_ptr<Proxy>
 (*ProxyCreateFunction)(
     const Address &_address,
@@ -50,6 +53,8 @@ public:
 
     COMMONAPI_EXPORT Factory();
     COMMONAPI_EXPORT virtual ~Factory();
+
+    COMMONAPI_EXPORT void init();
 
     COMMONAPI_EXPORT void registerProxyCreateMethod(const std::string &_interface,
                                    ProxyCreateFunction _function);
@@ -92,6 +97,13 @@ public:
     COMMONAPI_EXPORT bool registerManagedService(const std::shared_ptr<StubAdapter> &_adapter);
     COMMONAPI_EXPORT bool unregisterManagedService(const std::string &_address);
 
+    COMMONAPI_EXPORT void incrementConnection(std::shared_ptr<ProxyConnection> _connection);
+    COMMONAPI_EXPORT void decrementConnection(std::shared_ptr<ProxyConnection> _connection);
+    COMMONAPI_EXPORT void releaseConnection(const ConnectionId_t& _connectionId);
+
+    // Initialization
+    COMMONAPI_EXPORT void registerInterface(InterfaceInitFunction _function);
+
 private:
     COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(const ConnectionId_t &);
     COMMONAPI_EXPORT std::shared_ptr<Connection> getConnection(std::shared_ptr<MainLoopContext>);
@@ -106,6 +118,10 @@ private:
 
     std::map<std::string, std::shared_ptr<StubAdapter>> services_;
     std::mutex servicesMutex_;
+
+    std::list<InterfaceInitFunction> initializers_;
+    std::mutex initializerMutex_;
+    bool isInitialized_;
 };
 
 } // namespace SomeIP

@@ -26,7 +26,7 @@ class Message;
  *
  * This class represents the SomeIp specific implementation of CommonAPI::ClientId.
  */
-class ClientId : public CommonAPI::ClientId{
+class COMMONAPI_EXPORT_CLASS_EXPLICIT ClientId : public CommonAPI::ClientId{
     friend struct std::hash< ClientId >;
 
 public:
