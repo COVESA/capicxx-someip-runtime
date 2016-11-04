@@ -1,0 +1,28 @@
+Changes
+=======
+
+v3.1.10
+- Change Proxy::onServiceInstanceStatus to non-static to ensure that this method exists even if the proxy was deleted.
+- Avoid blocking Mainloop when trying to do a synchronous call in callback.
+- Fixed possible deadlock in unregister method.
+- Switch off payload check withing vsomeip as it is already done at CommonAPI core level.
+- Do not reconnect TCP if client is already inactive.
+- Corrected determination of read/write start position for bit deployed elements.
+- Make cleanupCancelled member in Connection.hpp atomic.
+- Fixed problem with pointer of 'DispatchSource' to its related 'Watch' as member variable and access of the watch in the destructor of the dispatch source (segfault possible if the watch is deleted before the dispatch source).
+- Ensure replies or timeouts are delivered when blocking call returns.
+- Enabled cleanup thread under windows to handle timeouts.
+- Unlock before handler call to avoid deadlock (in case a synchronous method call from seletive event's ErrorListener is made and another thread issues a synchronous call at the same time, a deadlock might occur in applications that are not using CommonAPI's mainloop integration).
+- Initial events were not received after unsubscribe and resubscribing, because subscription counter was not incremented for attributes.
+- Support message error replies (at the moment there is no possibility with SOME/IP to explicitely send an error reply message. So this feature is not working yet but the
+ basic framework to realize this feature on stub side was implemented).
+- Replace polling mechanism in Windows main-loop (the current polling mechanism was replaced with a WSAPoll on the file descriptors instead of WSAWaitForMultipleEvents on wsa events).
+
+v3.1.9.1
+- Fixed bad_weak_ptr bug if an 'InstanceAvailabilityStatusChangedEvent' occurs and the manager proxy was deleted.
+- Replaced raw pointer usage/bind by weak_ptr to avoid crashes when the proxy was deleted and we held a dangling pointer in case of subscribing to:
+  * attributes
+  * broadcasts/selective broadcasts
+  * proxy status events
+  * instance availability status changed events (managed)
+

@@ -42,7 +42,7 @@ void ProxyBase::removeEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
+        ProxyConnection::EventHandler* eventHandler,
         major_version_t major,
         minor_version_t minor) {
     bool found(false);

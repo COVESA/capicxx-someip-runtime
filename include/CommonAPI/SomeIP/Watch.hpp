@@ -72,7 +72,6 @@ private:
     const int pipeValue_;
 #ifdef WIN32
     HANDLE wsaEvent_;
-    OVERLAPPED ov;
 #endif
 };
 

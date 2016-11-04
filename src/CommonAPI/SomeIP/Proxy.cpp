@@ -207,30 +207,31 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
                                     instance_id_t instanceId,
                                     bool isAvailable,
                                     void* _data) {
+    (void)_proxy;
     (void)_data;
     {
-        std::lock_guard<std::mutex> itsLock(_proxy->availabilityMutex_);
+        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         const AvailabilityStatus itsStatus(
                 isAvailable ? AvailabilityStatus::AVAILABLE :
                         AvailabilityStatus::NOT_AVAILABLE);
 
-        if (_proxy->availabilityStatus_ == itsStatus) {
+        if (availabilityStatus_ == itsStatus) {
             return;
         }
-        _proxy->availabilityStatus_ = itsStatus;
+        availabilityStatus_ = itsStatus;
     }
-    _proxy->availabilityTimeoutThreadMutex_.lock();
+    availabilityTimeoutThreadMutex_.lock();
     //notify availability thread that proxy status has changed
-    _proxy->availabilityTimeoutCondition_.notify_all();
-    _proxy->availabilityTimeoutThreadMutex_.unlock();
+    availabilityTimeoutCondition_.notify_all();
+    availabilityTimeoutThreadMutex_.unlock();
 
     if (!isAvailable)
-        _proxy->getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
+        getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
 
     {
-        std::lock_guard<std::recursive_mutex> listenersLock(_proxy->proxyStatusEvent_.listenersMutex_);
-        for(auto listenerIt : _proxy->proxyStatusEvent_.listeners_)
-            _proxy->proxyStatusEvent_.notifySpecificListener(listenerIt.first, _proxy->availabilityStatus_);
+        std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
+        for(auto listenerIt : proxyStatusEvent_.listeners_)
+            proxyStatusEvent_.notifySpecificListener(listenerIt.first, availabilityStatus_);
     }
     _proxy->availabilityCondition_.notify_one();
 }
@@ -261,7 +262,16 @@ bool Proxy::init() {
 
     std::weak_ptr<Proxy> itsProxy = shared_from_this();
     availabilityHandlerId_ = connection->registerAvailabilityHandler(
-                                    address_, onServiceInstanceStatus, itsProxy, NULL);
+                                    address_,
+                                    std::bind(&Proxy::onServiceInstanceStatus,
+                                              this,
+                                              std::placeholders::_1,
+                                              std::placeholders::_2,
+                                              std::placeholders::_3,
+                                              std::placeholders::_4,
+                                              std::placeholders::_5),
+                                    itsProxy,
+                                    NULL);
     if (connection->isAvailable(address_)) {
         availabilityStatus_ = AvailabilityStatus::AVAILABLE;
     }

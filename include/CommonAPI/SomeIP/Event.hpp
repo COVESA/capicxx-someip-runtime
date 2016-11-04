@@ -68,7 +68,7 @@ public:
     virtual ~Event() {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = proxy_.getSomeIpAddress().getMinorVersion();
-        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_, major, minor);
+        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
     }
 
     virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
@@ -131,7 +131,7 @@ protected:
     virtual void onLastListenerRemoved(const Listener&) {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = proxy_.getSomeIpAddress().getMinorVersion();
-        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_, major, minor);
+        proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
     }
 
     virtual void onListenerRemoved(const Listener&) {

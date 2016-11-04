@@ -76,7 +76,7 @@ public:
 private:
     COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
 
-    COMMONAPI_EXPORT static void onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
+    COMMONAPI_EXPORT void onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
                                                          uint16_t serviceId,
                                                          uint16_t instanceId,
                                                          bool isAvailbale,

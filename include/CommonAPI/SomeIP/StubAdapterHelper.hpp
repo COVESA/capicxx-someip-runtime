@@ -337,7 +337,7 @@ private:
 };
 
 
-template<class, class, class, class, class>
+template<class, class, class, class, class...>
 class MethodWithReplyStubDispatcher;
 
 template <
@@ -346,17 +346,26 @@ template <
     template <class...> class Out_, class... OutArgs_,
     template <class...> class DeplIn_, class... DeplInArgs_,
     template <class...> class DeplOut_, class... DeplOutArgs_>
-class MethodWithReplyStubDispatcher<StubClass_, In_<InArgs_...>, Out_<OutArgs_...>, DeplIn_<DeplInArgs_...>, DeplOut_<DeplOutArgs_...>>
-    : public StubDispatcher<StubClass_> {
+class MethodWithReplyStubDispatcher<
+        StubClass_,
+        In_<InArgs_...>,
+        Out_<OutArgs_...>,
+        DeplIn_<DeplInArgs_...>,
+        DeplOut_<DeplOutArgs_...>> :
+            public StubDispatcher<StubClass_> {
 public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef std::function<void (OutArgs_...)> ReplyType_t;
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., ReplyType_t);
 
-    MethodWithReplyStubDispatcher(
-        StubFunctor_ stubFunctor, bool _isLittleEndian, std::tuple<DeplInArgs_*...> _in, std::tuple<DeplOutArgs_*...> _out)
-        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian), out_(_out) {
-
+    MethodWithReplyStubDispatcher(StubFunctor_ _stubFunctor,
+                                  const bool _isLittleEndian,
+                                  const std::tuple<DeplInArgs_*...> _in,
+                                  const std::tuple<DeplOutArgs_*...> _out) :
+                                      isLittleEndian_(_isLittleEndian),
+                                      out_(_out),
+                                      currentCall_(0),
+                                      stubFunctor_(_stubFunctor) {
         initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
 
@@ -371,22 +380,45 @@ public:
                     typename make_sequence_range<sizeof...(OutArgs_), 0>::type());
     }
 
-    bool sendReplyMessage(CommonAPI::CallId_t _call,
-                          std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args = std::make_tuple()) {
+    bool sendReplyMessage(const CommonAPI::CallId_t _call,
+                          const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args = std::make_tuple()) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto message = pending_.find(_call);
+            if(message != pending_.end()) {
+                Message reply = message->second.createResponseMessage();
+                pending_[_call] = reply;
+            } else {
+                return false;
+            }
+        }
         return sendReplyMessageHelper(_call, typename make_sequence_range<sizeof...(OutArgs_), 0>::type(), _args);
     }
 
+protected:
+
+    bool isLittleEndian_;
+
+    std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
+    std::tuple<DeplOutArgs_*...> out_;
+
+    CommonAPI::CallId_t currentCall_;
+    std::map<CommonAPI::CallId_t, Message> pending_;
+    std::mutex mutex_; // protects pending_
+
+    std::shared_ptr<ProxyConnection> connection_;
+
 private:
     template <int... DeplInArgIndices_>
-    inline void initialize(index_sequence<DeplInArgIndices_...>, std::tuple<DeplInArgs_*...> &_in) {
+    inline void initialize(index_sequence<DeplInArgIndices_...>, const std::tuple<DeplInArgs_*...> &_in) {
         in_ = std::make_tuple(std::get<DeplInArgIndices_>(_in)...);
     }
 
     template <int... InArgIndices_, int... OutArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
-                                        const std::shared_ptr<StubClass_> &_stub,
-                                        RemoteEventHandlerType* _remoteEventHandler,
-                                        std::shared_ptr<ProxyConnection> _connection,
+                                      const std::shared_ptr<StubClass_> &_stub,
+                                      RemoteEventHandlerType* _remoteEventHandler,
+                                      std::shared_ptr<ProxyConnection> _connection,
                                       index_sequence<InArgIndices_...>,
                                       index_sequence<OutArgIndices_...>) {
         (void) _remoteEventHandler;
@@ -407,13 +439,12 @@ private:
 
         std::shared_ptr<ClientId> client
             = std::make_shared<ClientId>(_message.getClientId());
-        Message reply = _message.createResponseMessage();
 
         CommonAPI::CallId_t call;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             call = currentCall_++;
-            pending_[call] = reply;
+            pending_[call] = _message;
         }
 
         // Call the stub function with the list of deserialized in-Parameters
@@ -439,9 +470,9 @@ private:
     }
 
     template<int... OutArgIndices_>
-    bool sendReplyMessageHelper(CommonAPI::CallId_t _call,
-                                   index_sequence<OutArgIndices_...>,
-                                std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args) {
+    bool sendReplyMessageHelper(const CommonAPI::CallId_t _call,
+                                index_sequence<OutArgIndices_...>,
+                                const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>& _args) {
         (void)_args;
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -465,16 +496,170 @@ private:
     }
 
     StubFunctor_ stubFunctor_;
-    bool isLittleEndian_;
+};
 
-    std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
-    std::tuple<DeplOutArgs_*...> out_;
+template <
+    typename StubClass_,
+    template <class...> class In_, class... InArgs_,
+    template <class...> class Out_, class... OutArgs_,
+    template <class...> class DeplIn_, class... DeplInArgs_,
+    template <class...> class DeplOut_, class... DeplOutArgs_,
+    class... ErrorReplies_>
+class MethodWithReplyStubDispatcher<
+        StubClass_,
+        In_<InArgs_...>,
+        Out_<OutArgs_...>,
+        DeplIn_<DeplInArgs_...>,
+        DeplOut_<DeplOutArgs_...>,
+        ErrorReplies_...>
+            : public MethodWithReplyStubDispatcher<
+              StubClass_,
+              In_<InArgs_...>,
+              Out_<OutArgs_...>,
+              DeplIn_<DeplInArgs_...>,
+              DeplOut_<DeplOutArgs_...>> {
+public:
+    typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
+    typedef std::function<void (OutArgs_...)> ReplyType_t;
+    typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, CommonAPI::CallId_t, InArgs_..., ReplyType_t, ErrorReplies_...);
 
-    CommonAPI::CallId_t currentCall_;
-    std::map<CommonAPI::CallId_t, Message> pending_;
-    std::mutex mutex_; // protects pending_
+    MethodWithReplyStubDispatcher(StubFunctor_ _stubFunctor,
+                                  const bool _isLittleEndian,
+                                  const std::tuple<DeplInArgs_*...> _in,
+                                  const std::tuple<DeplOutArgs_*...> _out,
+                                  const ErrorReplies_... _errorReplies) :
+                                      MethodWithReplyStubDispatcher<
+                                                    StubClass_,
+                                                    In_<InArgs_...>,
+                                                    Out_<OutArgs_...>,
+                                                    DeplIn_<DeplInArgs_...>,
+                                                    DeplOut_<DeplOutArgs_...>>(
+                                                            NULL,
+                                                            _isLittleEndian,
+                                                            _in,
+                                                            _out),
+                                      stubFunctor_(_stubFunctor),
+                                      errorReplies_(std::make_tuple(_errorReplies...)) { }
 
-    std::shared_ptr<ProxyConnection> connection_;
+    bool dispatchMessage(const Message &_message,
+                         const std::shared_ptr<StubClass_> &_stub,
+                         RemoteEventHandlerType* _remoteEventHandler,
+                         std::shared_ptr<ProxyConnection> _connection) {
+        this->connection_ = _connection;
+        return dispatchMessageHelper(
+                    _message, _stub, _remoteEventHandler, _connection,
+                    typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
+                    typename make_sequence_range<sizeof...(OutArgs_), 0>::type(),
+                    typename make_sequence_range<sizeof...(ErrorReplies_), 0>::type());
+    }
+
+
+    template <class... ErrorReplyOutArgs_, class... ErrorReplyDeplOutArgs_>
+    bool sendErrorReplyMessage(const CommonAPI::CallId_t _call,
+                               const std::string &_errorName,
+                               const std::tuple<CommonAPI::Deployable<ErrorReplyOutArgs_, ErrorReplyDeplOutArgs_>...>& _args) {
+        {
+            std::lock_guard<std::mutex> lock(this->mutex_);
+            auto message = this->pending_.find(_call);
+            if(message != this->pending_.end()) {
+                // TODO create error response message
+                Message reply = message->second.createResponseMessage();
+                this->pending_[_call] = reply;
+            } else {
+                return false;
+            }
+        }
+        return sendErrorReplyMessageHandler(_call, typename make_sequence_range<sizeof...(ErrorReplyOutArgs_), 0>::type(), _args);
+    }
+
+private:
+
+    template <int... InArgIndices_, int... OutArgIndices_, int... ErrorRepliesIndices_>
+    inline bool dispatchMessageHelper(const Message &_message,
+                                      const std::shared_ptr<StubClass_> &_stub,
+                                      RemoteEventHandlerType* _remoteEventHandler,
+                                      std::shared_ptr<ProxyConnection> _connection,
+                                      index_sequence<InArgIndices_...>,
+                                      index_sequence<OutArgIndices_...>,
+                                      index_sequence<ErrorRepliesIndices_...>) {
+        (void) _remoteEventHandler;
+        (void) _connection;
+
+        if (!_message.isRequestType()) {
+            auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
+            this->connection_->sendMessage(error);
+            return true;
+        }
+
+        if (sizeof...(DeplInArgs_) > 0) {
+            InputStream inputStream(_message, this->isLittleEndian_);
+            if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
+                    inputStream, std::get<InArgIndices_>(this->in_)...))
+                return false;
+        }
+
+        std::shared_ptr<ClientId> client
+            = std::make_shared<ClientId>(_message.getClientId());
+
+        CommonAPI::CallId_t call;
+        {
+            std::lock_guard<std::mutex> lock(this->mutex_);
+            call = this->currentCall_++;
+            this->pending_[call] = _message;
+        }
+
+        // Call the stub function with the list of deserialized in-Parameters
+        // and a lambda function which holds the call identifier the deployments
+        // for the out-Parameters and extracts them from the deployables before
+        // calling the send function.
+        (_stub.get()->*stubFunctor_)(
+            client,
+            call,
+            std::move(std::get<InArgIndices_>(this->in_).getValue())...,
+            [call, this](OutArgs_... _args) {
+                this->sendReplyMessage(
+                    call,
+                    std::make_tuple(
+                        CommonAPI::Deployable<OutArgs_, DeplOutArgs_>(
+                            _args, std::get<OutArgIndices_>(this->out_)
+                        )...
+                    )
+                );
+            },
+            std::get<ErrorRepliesIndices_>(errorReplies_)...
+        );
+
+        return true;
+    }
+
+    template<int... OutArgIndices_>
+    bool sendErrorReplyMessageHelper(const CommonAPI::CallId_t _call,
+                                     index_sequence<OutArgIndices_...>,
+                                     const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>& _args) {
+        (void)_args;
+
+        std::lock_guard<std::mutex> lock(this->mutex_);
+        auto reply = this->pending_.find(_call);
+        if (reply != this->pending_.end()) {
+            if (sizeof...(DeplOutArgs_) > 0) {
+                OutputStream output(reply->second, this->isLittleEndian_);
+                if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
+                        output, std::get<OutArgIndices_>(_args)...)) {
+                    this->pending_.erase(_call);
+                    return false;
+                }
+                output.flush();
+            }
+        } else {
+            return false;
+        }
+        bool isSuccessful = this->connection_->sendMessage(reply->second);
+        this->pending_.erase(_call);
+        return isSuccessful;
+    }
+
+    StubFunctor_ stubFunctor_;
+    std::tuple<ErrorReplies_...> errorReplies_;
 };
 
 template<class, class, class, class>

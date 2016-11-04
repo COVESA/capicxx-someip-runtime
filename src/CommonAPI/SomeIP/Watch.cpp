@@ -9,7 +9,8 @@
 #include <cstdio>
 
 #ifdef WIN32
-#include <Winsock2.h>
+#include <WinSock2.h>
+#include <ws2tcpip.h>
 #else
 #include <unistd.h>
 #endif
@@ -21,81 +22,127 @@ namespace SomeIP {
 
 Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
 #ifdef WIN32
-    std::string pipeName = "\\\\.\\pipe\\CommonAPI-SomeIP-";
+    WSADATA wsaData;
+    int iResult;
 
-    UUID uuid;
-    CHAR* uuidString = NULL;
-    UuidCreate(&uuid);
-    UuidToString(&uuid, (RPC_CSTR*)&uuidString);
-    pipeName += uuidString;
-    RpcStringFree((RPC_CSTR*)&uuidString);
+    SOCKET ListenSocket = INVALID_SOCKET;
 
-    HANDLE hPipe = ::CreateNamedPipe(
-        pipeName.c_str(),
-        PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-        PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE,
-        1,
-        4096,
-        4096,
-        100,
-        nullptr);
+    struct addrinfo *result = NULL;
+    struct addrinfo hints;
 
-    if (hPipe == INVALID_HANDLE_VALUE) {
-        if (GetLastError() != ERROR_PIPE_BUSY)
-        {
-            printf("Could not open pipe %d\n", GetLastError());
-        }
-
-        // All pipe instances are busy, so wait for sometime.
-        else if (!WaitNamedPipe(pipeName.c_str(), NMPWAIT_USE_DEFAULT_WAIT))
-        {
-            printf("Could not open pipe: wait timed out.\n");
-        }
+    // Initialize Winsock
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        printf("WSAStartup failed with error: %d\n", iResult);
     }
 
-    HANDLE hPipe2 = CreateFile(
-        pipeName.c_str(),   // pipe name 
-        GENERIC_READ |  // read and write access 
-        GENERIC_WRITE,
-        0,              // no sharing 
-        NULL,           // default security attributes
-        OPEN_EXISTING,  // opens existing pipe 
-        0,              // default attributes 
-        NULL);          // no template file 
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = AI_PASSIVE;
 
-    if (hPipe2 == INVALID_HANDLE_VALUE) {
-        if (GetLastError() != ERROR_PIPE_BUSY)
-        {
-            printf("Could not open pipe2 %d\n", GetLastError());
-        }
-
-        // All pipe instances are busy, so wait for sometime.
-        else if (!WaitNamedPipe(pipeName.c_str(), NMPWAIT_USE_DEFAULT_WAIT))
-        {
-            printf("Could not open pipe2: wait timed out.\n");
-        }
+    // Resolve the server address and port
+    iResult = getaddrinfo(NULL, "0", &hints, &result);
+    if (iResult != 0) {
+        printf("getaddrinfo failed with error: %d\n", iResult);
+        WSACleanup();
     }
 
-    pipeFileDescriptors_[0] = (int)hPipe;
-    pipeFileDescriptors_[1] = (int)hPipe2;
-
-    wsaEvent_ = ::CreateEventW(nullptr, TRUE, FALSE, nullptr);
-
-    if (wsaEvent_ == WSA_INVALID_EVENT) {
-        printf("Invalid Event Created!\n");
+    // Create a SOCKET for connecting to server
+    ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (ListenSocket == INVALID_SOCKET) {
+        printf("socket failed with error: %ld\n", WSAGetLastError());
+        freeaddrinfo(result);
+        WSACleanup();
     }
 
-    ov = { 0 };
-    ov.hEvent = wsaEvent_;
+    // Setup the TCP listening socket
+    iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
+    if (iResult == SOCKET_ERROR) {
+        printf("bind failed with error: %d\n", WSAGetLastError());
+        freeaddrinfo(result);
+        closesocket(ListenSocket);
+        WSACleanup();
+    }
 
-    BOOL retVal = ::ConnectNamedPipe(hPipe, &ov);
+    sockaddr* connected_addr = new sockaddr();
+    USHORT port = 0;
+    int namelength = sizeof(sockaddr);
+    iResult = getsockname(ListenSocket, connected_addr, &namelength);
+    if (iResult == SOCKET_ERROR) {
+        printf("getsockname failed with error: %d\n", WSAGetLastError());
+    } else if (connected_addr->sa_family == AF_INET) {
+        port = ((struct sockaddr_in*)connected_addr)->sin_port;
+    }
+    delete connected_addr;
 
-    if (retVal == 0) {
-        int error = GetLastError();
+    freeaddrinfo(result);
 
-        if (error != 535) {
-            printf("ERROR: ConnectNamedPipe failed with (%d)\n", error);
+    iResult = listen(ListenSocket, SOMAXCONN);
+    if (iResult == SOCKET_ERROR) {
+        printf("listen failed with error: %d\n", WSAGetLastError());
+        closesocket(ListenSocket);
+        WSACleanup();
+    }
+
+    wsaData;
+    pipeFileDescriptors_[0] = INVALID_SOCKET;
+    struct addrinfo *ptr = NULL;
+
+    // Initialize Winsock
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        printf("WSAStartup failed with error: %d\n", iResult);
+    }
+
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    // Resolve the server address and port
+    iResult = getaddrinfo("127.0.0.1", std::to_string(ntohs(port)).c_str(), &hints, &result);
+    if (iResult != 0) {
+        printf("getaddrinfo failed with error: %d\n", iResult);
+        WSACleanup();
+    }
+
+    // Attempt to connect to an address until one succeeds
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+
+        // Create a SOCKET for connecting to server
+        pipeFileDescriptors_[0] = socket(ptr->ai_family, ptr->ai_socktype,
+            ptr->ai_protocol);
+        if (pipeFileDescriptors_[0] == INVALID_SOCKET) {
+            printf("socket failed with error: %ld\n", WSAGetLastError());
+            WSACleanup();
         }
+
+        // Connect to server.
+        iResult = connect(pipeFileDescriptors_[0], ptr->ai_addr, (int)ptr->ai_addrlen);
+        if (iResult == SOCKET_ERROR) {
+            printf("connect failed with error: %ld\n", WSAGetLastError());
+            closesocket(pipeFileDescriptors_[0]);
+            pipeFileDescriptors_[0] = INVALID_SOCKET;
+            continue;
+        }
+        break;
+    }
+
+    freeaddrinfo(result);
+
+    if (pipeFileDescriptors_[0] == INVALID_SOCKET) {
+        printf("Unable to connect to server!\n");
+        WSACleanup();
+    }
+
+    // Accept a client socket
+    pipeFileDescriptors_[1] = accept(ListenSocket, NULL, NULL);
+    if (pipeFileDescriptors_[1] == INVALID_SOCKET) {
+        printf("accept failed with error: %d\n", WSAGetLastError());
+        closesocket(ListenSocket);
+        WSACleanup();
     }
 #else
     if(pipe2(pipeFileDescriptors_, O_NONBLOCK) == -1) {
@@ -110,23 +157,17 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
 
 Watch::~Watch() {
 #ifdef WIN32
-    BOOL retVal = DisconnectNamedPipe((HANDLE)pipeFileDescriptors_[0]);
-
-    if (!retVal) {
-        printf(TEXT("DisconnectNamedPipe failed. GLE=%d\n"), GetLastError());
+    // shutdown the connection since no more data will be sent
+    int iResult = shutdown(pipeFileDescriptors_[0], SD_SEND);
+    if (iResult == SOCKET_ERROR) {
+        printf("shutdown failed with error: %d\n", WSAGetLastError());
+        closesocket(pipeFileDescriptors_[0]);
+        WSACleanup();
     }
 
-    retVal = CloseHandle((HANDLE)pipeFileDescriptors_[0]);
-
-    if (!retVal) {
-        printf(TEXT("CloseHandle failed. GLE=%d\n"), GetLastError());
-    }
-
-    retVal = CloseHandle((HANDLE)pipeFileDescriptors_[1]);
-
-    if (!retVal) {
-        printf(TEXT("CloseHandle2 failed. GLE=%d\n"), GetLastError());
-    }
+    // cleanup
+    closesocket(pipeFileDescriptors_[0]);
+    WSACleanup();
 #else
     close(pipeFileDescriptors_[0]);
     close(pipeFileDescriptors_[1]);
@@ -170,20 +211,16 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
     queue_.push(_queueEntry);
 
 #ifdef WIN32
-    char writeValue[sizeof(pipeValue_)];
-    *reinterpret_cast<int*>(writeValue) = pipeValue_;
-    DWORD cbWritten;
+    // Send an initial buffer
+    char *sendbuf = "1";
 
-    int fSuccess = WriteFile(
-        (HANDLE)pipeFileDescriptors_[1],                  // pipe handle 
-        writeValue,             // message 
-        sizeof(pipeValue_),              // message length 
-        &cbWritten,             // bytes written 
-        &ov);                  // overlapped 
+    int iResult = send(pipeFileDescriptors_[1], sendbuf, (int)strlen(sendbuf), 0);
+    if (iResult == SOCKET_ERROR) {
+        int error = WSAGetLastError();
 
-    if (!fSuccess)
-    {
-        printf(TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError());
+        if (error != WSANOTINITIALISED) {
+            printf("send failed with error: %d\n", error);
+        }
     }
 #else
     if(write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_)) == -1) {
@@ -196,19 +233,20 @@ void Watch::popQueue() {
     std::unique_lock<std::mutex> itsLock(queueMutex_);
 
 #ifdef WIN32
-    char readValue[sizeof(pipeValue_)];
-    DWORD cbRead;
+    // Receive until the peer closes the connection
+    int iResult;
+    char recvbuf[1];
+    int recvbuflen = 1;
 
-    int fSuccess = ReadFile(
-        (HANDLE)pipeFileDescriptors_[0],    // pipe handle 
-        readValue,    // buffer to receive reply 
-        sizeof(pipeValue_),  // size of buffer 
-        &cbRead,  // number of bytes read 
-        &ov);    // overlapped 
-
-    if (!fSuccess)
-    {
-        printf(TEXT("ReadFile to pipe failed. GLE=%d\n"), GetLastError());
+    iResult = recv(pipeFileDescriptors_[0], recvbuf, recvbuflen, 0);
+    if (iResult > 0) {
+        //printf("Bytes received from %d: %d\n", wakeFd_.fd, iResult);
+    }
+    else if (iResult == 0) {
+        printf("Connection closed\n");
+    }
+    else {
+        printf("recv failed with error: %d\n", WSAGetLastError());
     }
 #else
     int readValue = 0;

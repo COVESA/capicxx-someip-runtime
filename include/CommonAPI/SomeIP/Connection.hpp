@@ -12,6 +12,7 @@
 
 #include <map>
 #include <set>
+#include <atomic>
 
 #include <vsomeip/application.hpp>
 
@@ -150,7 +151,7 @@ public:
 
     void removeEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
-            std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,  major_version_t major, minor_version_t minor);
+            ProxyConnection::EventHandler* _eventHandler,  major_version_t major, minor_version_t minor);
 
     void subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
@@ -267,7 +268,7 @@ private:
     std::shared_ptr<std::thread> asyncAnswersCleanupThread_;
     std::mutex cleanupMutex_;
     mutable std::condition_variable cleanupCondition_;
-    bool cleanupCancelled_;
+    std::atomic<bool> cleanupCancelled_;
 
     mutable std::recursive_mutex sendReceiveMutex_;
     typedef std::map<session_id_t,

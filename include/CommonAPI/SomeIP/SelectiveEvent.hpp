@@ -54,7 +54,7 @@ protected:
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = this->proxy_.getSomeIpAddress().getMinorVersion();
         this->proxy_.removeEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
-                this->eventId_, this->handler_, major, minor);
+                this->eventId_, this->handler_.get(), major, minor);
     }
 };
 

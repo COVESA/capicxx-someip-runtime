@@ -521,7 +521,7 @@ public:
                 byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[firstUsedByte]);
 #endif
 
-                uint8_t writePosition = uint8_t(8 - (_bits % 8));
+                uint8_t writePosition = uint8_t((8 - (_bits % 8)) % 8);
                 if (isNegative) {
                     for (uint8_t i = 1; i < writePosition; i++) {
                         byte_t itsBit = byte_t(0x01 << (7 - i));

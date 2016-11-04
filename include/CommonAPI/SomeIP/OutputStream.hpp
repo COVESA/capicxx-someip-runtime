@@ -441,7 +441,7 @@ public:
             source = &value.raw_[firstUsedByte];
             #endif
 
-            uint8_t readPosition = uint8_t(8 - (_bits % 8));
+            uint8_t readPosition = uint8_t((8 - (_bits % 8)) % 8);
             while (_bits > 0) {
                 uint8_t maxRead = uint8_t(8 - readPosition);
                 uint8_t maxWrite = uint8_t(8 - currentBit_);

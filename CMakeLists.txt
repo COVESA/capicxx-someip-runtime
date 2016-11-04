@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 1)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 9)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 10)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -119,9 +119,9 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.1.9 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.1.10 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.1.9 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(CommonAPI 3.1.10 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
@@ -132,7 +132,7 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 2.4.0 REQUIRED)
+find_package (vsomeip 2.5.0 REQUIRED)
 message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
@@ -145,16 +145,14 @@ include_directories (
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
 list (SORT CommonAPI-SomeIP_SRC)
 
-if (MSVC)
-set (RPCRT Rpcrt4)
-else()
-set (RPCRT "")
-endif()
- 
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip ${RPCRT})
+target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip)
+
+if (MSVC)
+    target_link_libraries(CommonAPI-SomeIP ws2_32 Rpcrt4)
+endif()
 
 ###################################################################################################
 
