@@ -1,5 +1,7 @@
 Changes
 =======
+v3.1.10.3
+- Fixed subscription counter handling
 
 v3.1.10.2
 - Revised handling for timeouts of asynchronous calls

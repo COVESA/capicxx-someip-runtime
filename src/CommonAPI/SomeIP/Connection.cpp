@@ -458,16 +458,19 @@ void Connection::addEventHandler(
         eventHandlers_[serviceId][instanceId][eventId][itsHandler.get()] = eventHandler;
         const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
 
+        if(!isField || isSelective) {
+            subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
+        }
+
         if(inserted) {
             if(isSelective) {
-                subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
                 addSelectiveErrorListener(serviceId, instanceId, eventGroupId);
             } else if(!isField) {
-                subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
                 application_->subscribe(serviceId, instanceId, eventGroupId, major,
                         vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
             }
         }
+
     }
 }
 
