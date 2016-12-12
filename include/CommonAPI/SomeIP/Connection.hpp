@@ -277,6 +277,7 @@ private:
                     std::shared_ptr<vsomeip::message>,
                     std::unique_ptr<MessageReplyAsyncHandler> > > async_answers_map_t;
     mutable async_answers_map_t asyncAnswers_;
+    mutable async_answers_map_t asyncTimeouts_;
 
     mutable std::mutex eventHandlerMutex_;
     typedef std::map<service_id_t,

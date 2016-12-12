@@ -1,6 +1,9 @@
 Changes
 =======
 
+v3.1.10.2
+- Revised handling for timeouts of asynchronous calls
+
 v3.1.10.1
 - Check subscription counter also if eventhandler was erased.
 - Avoid segmentation fault when creating a connection failed.

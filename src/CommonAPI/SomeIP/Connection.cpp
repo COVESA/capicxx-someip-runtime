@@ -129,6 +129,18 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
         }
 
         itsHandler->onMessageReply(callStatus, Message(_message));
+        return;
+    }
+
+    // handle async call timeouts in Mainloop mode
+    async_answers_map_t::iterator foundTimeoutHandler = asyncTimeouts_.find(sessionId);
+    if(foundTimeoutHandler != asyncTimeouts_.end()) {
+        std::unique_ptr<MessageReplyAsyncHandler> itsHandler
+            = std::move(std::get<2>(foundTimeoutHandler->second));
+        asyncTimeouts_.erase(sessionId);
+        sendReceiveMutex_.unlock();
+
+        itsHandler->onMessageReply(CallStatus::REMOTE_ERROR, Message(_message));
     } else {
         sendReceiveMutex_.unlock();
     }
@@ -210,11 +222,11 @@ void Connection::cleanup() {
                         std::shared_ptr<MsgQueueEntry> msg_queue_entry = std::make_shared<MsgQueueEntry>(
                                         response, commDirectionType::PROXYRECEIVE);
                         watch_->pushQueue(msg_queue_entry);
-                        it++;
+                        asyncTimeouts_[it->first] = std::move(it->second);
                     } else {
                         std::get<2>(it->second)->onMessageReply(CallStatus::REMOTE_ERROR, Message(response));
-                        it = asyncAnswers_.erase(it);
                     }
+                    it = asyncAnswers_.erase(it);
                 } else {
                     it++;
                 }
