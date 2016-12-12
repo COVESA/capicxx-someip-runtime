@@ -479,19 +479,18 @@ void Connection::removeEventHandler(
                 foundEventId->second.erase(eventHandler);
                 if (foundEventId->second.size() == 0) {
                     foundInstance->second.erase(foundEventId);
-
-                    //decrement subscription counter for given eventgroup
-                    auto s = subscriptionCounters_.find(serviceId);
-                    if (s != subscriptionCounters_.end()) {
-                        auto i = s->second.find(instanceId);
-                        if (i != s->second.end()) {
-                            auto g = i->second.find(eventGroupId);
-                            if (g != i->second.end()) {
-                                if (g->second > 0)
-                                    g->second--;
-                                if(g->second == 0) {
-                                    application_->unsubscribe(serviceId, instanceId, eventGroupId);
-                                }
+                }
+                //decrement subscription counter for given eventgroup
+                auto s = subscriptionCounters_.find(serviceId);
+                if (s != subscriptionCounters_.end()) {
+                    auto i = s->second.find(instanceId);
+                    if (i != s->second.end()) {
+                        auto g = i->second.find(eventGroupId);
+                        if (g != i->second.end()) {
+                            if (g->second > 0)
+                                g->second--;
+                            if(g->second == 0) {
+                                application_->unsubscribe(serviceId, instanceId, eventGroupId);
                             }
                         }
                     }

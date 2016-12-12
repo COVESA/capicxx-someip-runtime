@@ -99,7 +99,7 @@ OutputStream& OutputStream::writeValue(const uint16_t &_value, const IntegerDepl
 }
 
 OutputStream& OutputStream::writeValue(const uint32_t &_value, const EmptyDeployment *) {
-    return writeValue(_value, static_cast<const IntegerDeployment<int32_t> *>(nullptr));
+    return writeValue(_value, static_cast<const IntegerDeployment<uint32_t> *>(nullptr));
 }
 
 OutputStream& OutputStream::writeValue(const uint32_t &_value, const IntegerDeployment<uint32_t> *_depl) {

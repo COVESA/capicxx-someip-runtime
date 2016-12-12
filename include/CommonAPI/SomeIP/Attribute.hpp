@@ -30,8 +30,8 @@ public:
 
     ReadonlyAttribute(Proxy &_proxy,
                       const method_id_t _getMethodId,
-                      const bool _isLittleEndian,
                       const bool _getReliable,
+                      const bool _isLittleEndian,
                       AttributeDepl_ *_depl = nullptr)
         : proxy_(_proxy),
           getMethodId_(_getMethodId),
@@ -114,12 +114,12 @@ public:
 
     Attribute(Proxy &_proxy,
               const method_id_t _getMethodId,
-              const bool _isLittleEndian,
               const bool _getReliable,
+              const bool _isLittleEndian,
               const method_id_t _setMethodId,
               const bool _setReliable,
               AttributeDepl_ *_depl = nullptr)
-        : ReadonlyAttribute< AttributeType_, AttributeDepl_>(_proxy, _getMethodId, _isLittleEndian, _getReliable, _depl),
+        : ReadonlyAttribute< AttributeType_, AttributeDepl_>(_proxy, _getMethodId, _getReliable, _isLittleEndian, _depl),
           setMethodId_(_setMethodId),
           setReliable_(_setReliable) {
     }
@@ -186,7 +186,7 @@ public:
                         const bool _getReliable,
                         const bool _isLittleEndian,
                         AttributeType_Arguments... _arguments)
-        : AttributeType_(_proxy, _getMethodId, _isLittleEndian, _getReliable, _arguments...),
+        : AttributeType_(_proxy, _getMethodId, _getReliable, _isLittleEndian, _arguments...),
           changedEvent_(_proxy,
                         _eventgroupId,
                         _eventId,

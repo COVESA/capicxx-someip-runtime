@@ -19,6 +19,10 @@ INITIALIZER(FactoryInit) {
     Runtime::get()->registerFactory("someip", Factory::get());
 }
 
+DEINITIALIZER(FactoryDeinit) {
+    Runtime::get()->unregisterFactory("someip");
+}
+
 std::shared_ptr<Factory>
 Factory::get() {
     static std::shared_ptr<Factory> theFactory = std::make_shared<Factory>();
@@ -349,7 +353,9 @@ Factory::getConnection(const ConnectionId_t &_connectionId) {
         }
     }
 
-    incrementConnection(itsConnection);
+    if(itsConnection)
+        incrementConnection(itsConnection);
+
     return itsConnection;
 }
 

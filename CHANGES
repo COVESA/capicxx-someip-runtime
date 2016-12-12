@@ -1,6 +1,13 @@
 Changes
 =======
 
+v3.1.10.1
+- Check subscription counter also if eventhandler was erased.
+- Avoid segmentation fault when creating a connection failed.
+- Fix connection does not get destroyed on unregisterService().
+- Read value of nosubscribe attributes not working.
+- Fixed crash on dlclose().
+
 v3.1.10
 - Change Proxy::onServiceInstanceStatus to non-static to ensure that this method exists even if the proxy was deleted.
 - Avoid blocking Mainloop when trying to do a synchronous call in callback.

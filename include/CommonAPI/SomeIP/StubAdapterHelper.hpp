@@ -406,7 +406,7 @@ protected:
     std::map<CommonAPI::CallId_t, Message> pending_;
     std::mutex mutex_; // protects pending_
 
-    std::shared_ptr<ProxyConnection> connection_;
+    std::weak_ptr<ProxyConnection> connection_;
 
 private:
     template <int... DeplInArgIndices_>
@@ -426,7 +426,9 @@ private:
 
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
-            connection_->sendMessage(error);
+            if(auto itsConnection = connection_.lock()) {
+                itsConnection->sendMessage(error);
+            }
             return true;
         }
 
@@ -490,7 +492,10 @@ private:
         } else {
             return false;
         }
-        bool isSuccessful = connection_->sendMessage(reply->second);
+        bool isSuccessful = false;
+        if(auto itsConnection = connection_.lock()) {
+            isSuccessful = itsConnection->sendMessage(reply->second);
+        }
         pending_.erase(_call);
         return isSuccessful;
     }
