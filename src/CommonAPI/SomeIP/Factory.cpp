@@ -15,12 +15,17 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+static std::weak_ptr<CommonAPI::Runtime> runtime__;
+
 INITIALIZER(FactoryInit) {
+    runtime__ = Runtime::get();
     Runtime::get()->registerFactory("someip", Factory::get());
 }
 
 DEINITIALIZER(FactoryDeinit) {
-    Runtime::get()->unregisterFactory("someip");
+    if (auto rt = runtime__.lock()) {
+        rt->unregisterFactory("someip");
+    }
 }
 
 std::shared_ptr<Factory>

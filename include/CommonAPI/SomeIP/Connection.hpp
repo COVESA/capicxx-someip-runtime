@@ -324,6 +324,9 @@ private:
             std::map<eventgroup_id_t,
                 std::map<ProxyConnection::EventHandler* ,
                     std::pair<std::weak_ptr<ProxyConnection::EventHandler>, std::set<uint32_t>>>>>> pendingSelectiveErrorHandlers_;
+
+    std::mutex availabilityCalledMutex_;
+    std::map<service_id_t, std::map<instance_id_t, bool>> availabilityCalled_;
 };
 
 

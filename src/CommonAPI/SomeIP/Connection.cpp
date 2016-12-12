@@ -160,6 +160,10 @@ void Connection::onConnectionEvent(state_type_e state) {
 
 void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _instance,
            bool _is_available) {
+    {
+        std::lock_guard<std::mutex> itsLock(availabilityCalledMutex_);
+        availabilityCalled_[_service][_instance] = true;
+    }
     if (auto lockedContext = mainLoopContext_.lock()) {
         std::shared_ptr<AvblQueueEntry> avbl_queue_entry = std::make_shared<AvblQueueEntry>(_service, _instance, _is_available);
         watch_->pushQueue(avbl_queue_entry);
@@ -620,6 +624,26 @@ void Connection::addSelectiveErrorListener(service_id_t serviceId,
 
 bool
 Connection::isAvailable(const Address &_address) {
+    {
+        std::lock_guard<std::mutex> itsLock(connectionMutex_);
+        if (connectionStatus_ != state_type_e::ST_REGISTERED) {
+            return false;
+        }
+    }
+    {
+        bool availabilityCalled(false);
+        std::lock_guard<std::mutex> itsLock(availabilityCalledMutex_);
+        auto its_service = availabilityCalled_.find(_address.getService());
+        if (its_service != availabilityCalled_.end()) {
+            auto its_instance = its_service->second.find(_address.getInstance());
+            if (its_instance != its_service->second.end()) {
+                availabilityCalled = its_instance->second;
+            }
+        }
+        if (!availabilityCalled) {
+            return false;
+        }
+    }
     return application_->is_available(_address.getService(), _address.getInstance(),
             _address.getMajorVersion(), _address.getMinorVersion());
 }
