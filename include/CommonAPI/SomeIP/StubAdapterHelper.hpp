@@ -594,7 +594,9 @@ private:
 
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
-            this->connection_->sendMessage(error);
+            if(auto itsConnection = this->connection_.lock()) {
+                itsConnection->sendMessage(error);
+            }
             return true;
         }
 
@@ -661,7 +663,10 @@ private:
         } else {
             return false;
         }
-        bool isSuccessful = this->connection_->sendMessage(reply->second);
+        bool isSuccessful = false;
+        if(auto itsConnection = this->connection_.lock()) {
+            isSuccessful = itsConnection->sendMessage(reply->second);
+        }
         this->pending_.erase(_call);
         return isSuccessful;
     }

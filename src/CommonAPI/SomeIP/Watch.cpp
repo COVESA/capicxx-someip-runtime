@@ -188,14 +188,17 @@ const HANDLE& Watch::getAssociatedEvent() {
 #endif
 
 const std::vector<CommonAPI::DispatchSource*>& Watch::getDependentDispatchSources() {
+    std::lock_guard<std::mutex> itsLock(dependentDispatchSourcesMutex_);
     return dependentDispatchSources_;
 }
 
 void Watch::addDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource) {
+    std::lock_guard<std::mutex> itsLock(dependentDispatchSourcesMutex_);
     dependentDispatchSources_.push_back(_dispatchSource);
 }
 
 void Watch::removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSource) {
+    std::lock_guard<std::mutex> itsLock(dependentDispatchSourcesMutex_);
     std::vector<CommonAPI::DispatchSource*>::iterator it;
 
     for (it = dependentDispatchSources_.begin(); it != dependentDispatchSources_.end(); it++) {

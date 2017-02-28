@@ -18,23 +18,19 @@ DispatchSource::DispatchSource(Watch* watch) :
 }
 
 DispatchSource::~DispatchSource() {
-    std::unique_lock<std::mutex> itsLock(watchMutex_);
     watch_->removeDependentDispatchSource(this);
 }
 
 bool DispatchSource::prepare(int64_t& timeout) {
-    std::unique_lock<std::mutex> itsLock(watchMutex_);
     timeout = -1;
     return !watch_->emptyQueue();
 }
 
 bool DispatchSource::check() {
-    std::unique_lock<std::mutex> itsLock(watchMutex_);
     return !watch_->emptyQueue();
 }
 
 bool DispatchSource::dispatch() {
-    std::unique_lock<std::mutex> itsLock(watchMutex_);
     if (!watch_->emptyQueue()) {
         auto queueEntry = watch_->frontQueue();
         watch_->popQueue();

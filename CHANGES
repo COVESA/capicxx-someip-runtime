@@ -1,6 +1,11 @@
 Changes
 =======
 
+v3.1.11.1
+- Adapt to vSomeIP 2.6.0 (event based subscriptions)
+- Fixed races
+- Fixed exception on thread destruction
+
 v3.1.11
 - Bugfixes
 - Removed Config.hpp. The defines of this file are now located in Constants.hpp

@@ -235,13 +235,11 @@ private:
     void dispatch();
     void cleanup();
 
-    void eventInitialValueCallback(const CallStatus callStatus,
-                const Message& message, std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
-                const uint32_t tag);
-
     void addSelectiveErrorListener(service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId);
+
+    void doDisconnect();
 
     std::shared_ptr<std::thread> dispatchThread_;
 
@@ -261,9 +259,8 @@ private:
 
     std::shared_ptr<vsomeip::application> application_;
 
-    mutable std::mutex sendAndBlockMutex_;
     mutable std::map<session_id_t, Message> sendAndBlockAnswers_;
-    mutable std::condition_variable sendAndBlockCondition_;
+    mutable std::condition_variable_any sendAndBlockCondition_;
 
     std::shared_ptr<std::thread> asyncAnswersCleanupThread_;
     std::mutex cleanupMutex_;
@@ -289,7 +286,7 @@ private:
 
     typedef std::map<service_id_t,
             std::map<instance_id_t,
-                    std::map<eventgroup_id_t, uint32_t>>> subscription_counter_map_t;
+                    std::map<event_id_t, uint32_t>>> subscription_counter_map_t;
 
     mutable subscription_counter_map_t subscriptionCounters_;
 

@@ -213,26 +213,26 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
     (void)_proxy;
     (void)_data;
     {
-        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
-        const AvailabilityStatus itsStatus(
-                isAvailable ? AvailabilityStatus::AVAILABLE :
-                        AvailabilityStatus::NOT_AVAILABLE);
-
-        if (availabilityStatus_ == itsStatus) {
-            return;
-        }
-        availabilityStatus_ = itsStatus;
-    }
-    availabilityTimeoutThreadMutex_.lock();
-    //notify availability thread that proxy status has changed
-    availabilityTimeoutCondition_.notify_all();
-    availabilityTimeoutThreadMutex_.unlock();
-
-    if (!isAvailable)
-        getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
-
-    {
         std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
+        {
+            std::lock_guard<std::mutex> itsLock(availabilityMutex_);
+            const AvailabilityStatus itsStatus(
+                    isAvailable ? AvailabilityStatus::AVAILABLE :
+                            AvailabilityStatus::NOT_AVAILABLE);
+
+            if (availabilityStatus_ == itsStatus) {
+                return;
+            }
+            availabilityStatus_ = itsStatus;
+        }
+        availabilityTimeoutThreadMutex_.lock();
+        //notify availability thread that proxy status has changed
+        availabilityTimeoutCondition_.notify_all();
+        availabilityTimeoutThreadMutex_.unlock();
+
+        if (!isAvailable)
+            getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
+
         for(auto listenerIt : proxyStatusEvent_.listeners_)
             proxyStatusEvent_.notifySpecificListener(listenerIt.first, availabilityStatus_);
     }

@@ -66,6 +66,7 @@ private:
     std::queue<std::shared_ptr<QueueEntry>> queue_;
 
     std::mutex queueMutex_;
+    std::mutex dependentDispatchSourcesMutex_;
 
     std::weak_ptr<Connection> connection_;
 

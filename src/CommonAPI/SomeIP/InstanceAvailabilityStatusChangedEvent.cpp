@@ -19,6 +19,8 @@ InstanceAvailabilityStatusChangedEvent::InstanceAvailabilityStatusChangedEvent(
                 observedInterfaceName_(_interfaceName),
                 observedInterfaceServiceId_ (_serviceId),
                 availabilityHandlerId_(0) {
+    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+    proxy_.getConnection()->requestService(wildcardAddress);
 }
 
 InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent() {
@@ -26,6 +28,8 @@ InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent(
 
     proxy_.getConnection()->unregisterAvailabilityHandler(
             wildcardAddress, availabilityHandlerId_);
+
+    proxy_.getConnection()->releaseService(wildcardAddress);
 }
 
 void

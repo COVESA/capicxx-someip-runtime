@@ -132,7 +132,7 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 2.5.3 REQUIRED)
+find_package (vsomeip 2.6.0 REQUIRED)
 message(STATUS "vsomeip version: ${vsomeip_VERSION}")
 
 include_directories (
