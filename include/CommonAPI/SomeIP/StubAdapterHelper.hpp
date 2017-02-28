@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -312,10 +312,11 @@ private:
         (void)_remoteEventHandler;
         (void)_connection;
 
+        std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in(in_);
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(in_)...))
+                    inputStream, std::get<InArgIndices_>(in)...))
                 return false;
         }
 
@@ -324,7 +325,7 @@ private:
 
         (_stub.get()->*stubFunctor_)(
             client,
-            std::move(std::get<InArgIndices_>(in_))...
+            std::move(std::get<InArgIndices_>(in))...
         );
 
            return true;
@@ -432,10 +433,11 @@ private:
             return true;
         }
 
+        std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in(in_);
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(in_)...))
+                    inputStream, std::get<InArgIndices_>(in)...))
                 return false;
         }
 
@@ -455,7 +457,7 @@ private:
         // calling the send function.
         (_stub.get()->*stubFunctor_)(
             client,
-            std::move(std::get<InArgIndices_>(in_).getValue())...,
+            std::move(std::get<InArgIndices_>(in).getValue())...,
             [call, this](OutArgs_... _args) {
                 this->sendReplyMessage(
                     call,
@@ -596,10 +598,11 @@ private:
             return true;
         }
 
+        std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in(this->in_);
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, this->isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(this->in_)...))
+                    inputStream, std::get<InArgIndices_>(in)...))
                 return false;
         }
 
@@ -620,7 +623,7 @@ private:
         (_stub.get()->*stubFunctor_)(
             client,
             call,
-            std::move(std::get<InArgIndices_>(this->in_).getValue())...,
+            std::move(std::get<InArgIndices_>(in).getValue())...,
             [call, this](OutArgs_... _args) {
                 this->sendReplyMessage(
                     call,

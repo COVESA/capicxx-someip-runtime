@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -192,8 +192,11 @@ void Proxy::notifySpecificListener(std::weak_ptr<Proxy> _proxy,
                                    const ProxyStatusEvent::Subscription _subscription) {
     if(auto itsProxy = _proxy.lock()) {
         std::lock_guard<std::recursive_mutex> listenersLock(itsProxy->proxyStatusEvent_.listenersMutex_);
-
-        AvailabilityStatus itsStatus = itsProxy->availabilityStatus_;
+        AvailabilityStatus itsStatus = AvailabilityStatus::UNKNOWN;
+        {
+            std::lock_guard<std::mutex> itsLock(itsProxy->availabilityMutex_);
+            itsStatus = itsProxy->availabilityStatus_;
+        }
         if (itsStatus != AvailabilityStatus::UNKNOWN)
             itsProxy->proxyStatusEvent_.notifySpecificListener(_subscription, itsStatus);
 
@@ -237,10 +240,15 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
 }
 
 Proxy::Proxy(const Address &_address,
-        const std::shared_ptr<ProxyConnection> &connection, bool hasSelective) :
-        ProxyBase(connection), address_(_address), proxyStatusEvent_(this), availabilityStatus_(
-                AvailabilityStatus::UNKNOWN), interfaceVersionAttribute_(*this,
-                0x0, true, false), hasSelectiveEvents_(hasSelective) {
+             const std::shared_ptr<ProxyConnection> &connection,
+             bool hasSelective) :
+        ProxyBase(connection),
+        address_(_address),
+        proxyStatusEvent_(this),
+        availabilityStatus_(AvailabilityStatus::UNKNOWN),
+        availabilityHandlerId_(0),
+        interfaceVersionAttribute_(*this, 0x0, true, false),
+        hasSelectiveEvents_(hasSelective) {
 }
 
 Proxy::~Proxy() {
@@ -273,6 +281,7 @@ bool Proxy::init() {
                                     itsProxy,
                                     NULL);
     if (connection->isAvailable(address_)) {
+        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         availabilityStatus_ = AvailabilityStatus::AVAILABLE;
     }
 
@@ -354,6 +363,7 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
 }
 
 AvailabilityStatus Proxy::getAvailabilityStatus() const {
+    std::lock_guard<std::mutex> itsLock(availabilityMutex_);
     return availabilityStatus_;
 }
 
@@ -368,7 +378,7 @@ InterfaceVersionAttribute& Proxy::getInterfaceVersionAttribute() {
 void Proxy::getInitialEvent(service_id_t serviceId, instance_id_t instanceId,
                             eventgroup_id_t eventGroupId, event_id_t eventId,
                             major_version_t major) {
-    getConnection()->getInitialEvent(serviceId, instanceId, eventGroupId,
+    getConnection()->subscribeForField(serviceId, instanceId, eventGroupId,
             eventId, major);
 }
 

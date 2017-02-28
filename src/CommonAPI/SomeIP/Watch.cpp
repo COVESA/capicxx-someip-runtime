@@ -1,4 +1,4 @@
-// Copyright (C) 2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2015-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <cstdio>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #else
@@ -21,7 +21,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
-#ifdef WIN32
+#ifdef _WIN32
     WSADATA wsaData;
     int iResult;
 
@@ -156,7 +156,7 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
 }
 
 Watch::~Watch() {
-#ifdef WIN32
+#ifdef _WIN32
     // shutdown the connection since no more data will be sent
     int iResult = shutdown(pipeFileDescriptors_[0], SD_SEND);
     if (iResult == SOCKET_ERROR) {
@@ -181,7 +181,7 @@ const pollfd& Watch::getAssociatedFileDescriptor() {
     return pollFileDescriptor_;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 const HANDLE& Watch::getAssociatedEvent() {
     return wsaEvent_;
 }
@@ -210,7 +210,7 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
     std::unique_lock<std::mutex> itsLock(queueMutex_);
     queue_.push(_queueEntry);
 
-#ifdef WIN32
+#ifdef _WIN32
     // Send an initial buffer
     char *sendbuf = "1";
 
@@ -232,7 +232,7 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
 void Watch::popQueue() {
     std::unique_lock<std::mutex> itsLock(queueMutex_);
 
-#ifdef WIN32
+#ifdef _WIN32
     // Receive until the peer closes the connection
     int iResult;
     char recvbuf[1];

@@ -1,6 +1,14 @@
 Changes
 =======
 
+v3.1.11
+- Bugfixes
+- Removed Config.hpp. The defines of this file are now located in Constants.hpp
+  as C++ constants.
+- Fixed concurrency issues when hosting multiple instances of the same service
+  in the same binary.
+- Ensure proxy is not destroyed while callback function is invoked
+
 v3.1.10.4
 - Fixed crash (double free) on destruction of static objects
 - Fixed availability issues in verification tests

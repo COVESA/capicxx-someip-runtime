@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -14,7 +14,7 @@
 #include <CommonAPI/Runtime.hpp>
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/Factory.hpp>
-#include <CommonAPI/SomeIP/Config.hpp>
+#include <CommonAPI/SomeIP/Constants.hpp>
 #include <CommonAPI/SomeIP/Connection.hpp>
 #include <CommonAPI/SomeIP/Defines.hpp>
 #include <CommonAPI/SomeIP/ProxyAsyncEventCallbackHandler.hpp>
@@ -645,7 +645,7 @@ Connection::isAvailable(const Address &_address) {
         }
     }
     return application_->is_available(_address.getService(), _address.getInstance(),
-            _address.getMajorVersion(), _address.getMinorVersion());
+            _address.getMajorVersion(), ANY_MINOR_VERSION);
 }
 
 AvailabilityHandlerId_t
@@ -661,7 +661,7 @@ Connection::registerAvailabilityHandler(
     service_id_t itsService = _address.getService();
     instance_id_t itsInstance = _address.getInstance();
     major_version_t itsMajor = _address.getMajorVersion();
-    minor_version_t itsMinor = _address.getMinorVersion();
+    minor_version_t itsMinor = ANY_MINOR_VERSION;
 
     {
         std::unique_lock<std::mutex> itsLock(availabilityMutex_);
@@ -703,7 +703,7 @@ Connection::unregisterAvailabilityHandler(
     service_id_t itsService = _address.getService();
     instance_id_t itsInstance = _address.getInstance();
     major_version_t itsMajor = _address.getMajorVersion();
-    minor_version_t itsMinor = _address.getMinorVersion();
+    minor_version_t itsMinor = ANY_MINOR_VERSION;
 
     {
         std::unique_lock<std::mutex> itsLock(availabilityMutex_);
@@ -743,7 +743,7 @@ Connection::registerService(const Address &_address) {
 
     vsomeip::message_handler_t handler
         = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
-    application_->register_message_handler(service, instance, SOMEIP_ANY_METHOD, handler);
+    application_->register_message_handler(service, instance, ANY_METHOD, handler);
     application_->offer_service(service, instance, majorVersion, minorVersion);
 }
 
@@ -758,7 +758,7 @@ Connection::unregisterService(const Address &_address) {
     minor_version_t minor = _address.getMinorVersion();
 
     application_->stop_offer_service(service, instance, major, minor);
-    application_->unregister_message_handler(service, instance, SOMEIP_ANY_METHOD);
+    application_->unregister_message_handler(service, instance, ANY_METHOD);
 }
 
 void
@@ -766,22 +766,57 @@ Connection::requestService(const Address &_address, bool _hasSelective) {
     service_id_t service = _address.getService();
     instance_id_t instance = _address.getInstance();
     major_version_t majorVersion = _address.getMajorVersion();
-    minor_version_t minorVersion = SOMEIP_ANY_MINOR_VERSION;
+    minor_version_t minorVersion = ANY_MINOR_VERSION;
 
+    {
+        std::lock_guard<std::mutex> lock(requestedServicesMutex_);
+        bool found(false);
+        auto foundService = requestedServices_.find(service);
+        if (foundService != requestedServices_.end()) {
+            auto foundInstance = foundService->second.find((instance));
+            if (foundInstance != foundService->second.end()) {
+                found = true;
+                foundInstance->second++;
+            }
+        }
+        if (!found) {
+            requestedServices_[service][instance] = 1;
+        }
+    }
     application_->request_service(service, instance,
                                   majorVersion, minorVersion,
                                   _hasSelective);
 
     vsomeip::message_handler_t handler
         = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
-    application_->register_message_handler(service, instance, SOMEIP_ANY_METHOD, handler);
+    application_->register_message_handler(service, instance, ANY_METHOD, handler);
 }
 
 void
 Connection::releaseService(const Address &_address) {
     service_id_t service = _address.getService();
     instance_id_t instance = _address.getInstance();
-    application_->release_service(service, instance);
+    {
+        std::lock_guard<std::mutex> lock(requestedServicesMutex_);
+        auto foundService = requestedServices_.find(service);
+        if (foundService != requestedServices_.end()) {
+            auto foundInstance = foundService->second.find((instance));
+            if (foundInstance != foundService->second.end()) {
+                if (foundInstance->second > 0) {
+                    foundInstance->second--;
+                }
+                if (!foundInstance->second) {
+                    application_->release_service(service, instance);
+
+                    foundService->second.erase(instance);
+                    if (!foundService->second.size()) {
+                        requestedServices_.erase(service);
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 void
@@ -800,17 +835,77 @@ Connection::unregisterEvent(service_id_t _service, instance_id_t _instance,
 void
 Connection::requestEvent(service_id_t _service, instance_id_t _instance,
         event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) {
-    std::set<eventgroup_id_t> itsEventGroups;
-    itsEventGroups.insert(_eventGroup);
+    bool found(false);
+    {
+        std::lock_guard<std::mutex> lock(requestedEventsMutex_);
+        auto foundService = requestedEvents_.find(_service);
+        if (foundService != requestedEvents_.end()) {
+            auto foundInstance = foundService->second.find(_instance);
+            if (foundInstance != foundService->second.end()) {
+                auto foundEventgroup = foundInstance->second.find(_eventGroup);
+                if (foundEventgroup != foundInstance->second.end()) {
+                    auto foundEvent = foundEventgroup->second.find(_event);
+                    if (foundEvent != foundEventgroup->second.end()) {
+                        found = true;
+                        foundEvent->second++;
+                    }
+                }
+            }
+        }
 
-    application_->request_event(_service, _instance,
-            _event, itsEventGroups, _isField);
+        if (!found) {
+            requestedEvents_[_service][_instance][_eventGroup][_event] = 1;
+        }
+    }
+    if (!found) {
+        std::set<eventgroup_id_t> itsEventGroups;
+        itsEventGroups.insert(_eventGroup);
+
+        application_->request_event(_service, _instance,
+                _event, itsEventGroups, _isField);
+    }
 }
 
 void
 Connection::releaseEvent(service_id_t _service, instance_id_t _instance,
         event_id_t _event) {
-    application_->release_event(_service, _instance, _event);
+    bool isLast(false);
+    {
+        std::lock_guard<std::mutex> lock(requestedEventsMutex_);
+        auto foundService = requestedEvents_.find(_service);
+        if (foundService != requestedEvents_.end()) {
+            auto foundInstance = foundService->second.find(_instance);
+            if (foundInstance != foundService->second.end()) {
+                for (auto foundEventgroup = foundInstance->second.begin();
+                        foundEventgroup != foundInstance->second.end(); ) {
+                    auto foundEvent = foundEventgroup->second.find(_event);
+                    if (foundEvent != foundEventgroup->second.end()) {
+                        if (foundEvent->second > 0) {
+                            foundEvent->second--;
+                        }
+                        if (!foundEvent->second) {
+                            isLast = true;
+                            foundEventgroup->second.erase(_event);
+                        }
+                    }
+                    if (!foundEventgroup->second.size()) {
+                        foundEventgroup = foundInstance->second.erase(foundEventgroup);
+                    } else {
+                        foundEventgroup++;
+                    }
+                }
+                if (!foundInstance->second.size()) {
+                    foundService->second.erase(_instance);
+                }
+            }
+            if (!foundService->second.size()) {
+                requestedEvents_.erase(_service);
+            }
+        }
+    }
+    if (isLast) {
+        application_->release_event(_service, _instance, _event);
+    }
 }
 
 const std::shared_ptr<StubManager> Connection::getStubManager() {
@@ -921,12 +1016,15 @@ void Connection::unregisterSubsciptionHandler(const Address &_address,
     application_->unregister_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup);
 }
 
-void Connection::getInitialEvent(service_id_t serviceId,
+void Connection::subscribeForField(service_id_t serviceId,
                                  instance_id_t instanceId,
                                  eventgroup_id_t eventGroupId,
                                  event_id_t eventId,
                                  major_version_t major) {
-    subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
+    {
+        std::lock_guard<std::mutex> its_lock(eventHandlerMutex_);
+        subscriptionCounters_[serviceId][instanceId][eventGroupId]++;
+    }
     application_->subscribe(serviceId, instanceId, eventGroupId, major,
             vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
 }

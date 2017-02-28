@@ -1,8 +1,8 @@
 ### CommonAPI C++ SOME/IP Runtime
 
 ##### Copyright
-Copyright (C) 2016, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
-Copyright (C) 2016, GENIVI Alliance, Inc.
+Copyright (C) 2016-2017, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
+Copyright (C) 2016-2017, GENIVI Alliance, Inc.
 
 This file is part of GENIVI Project IPC Common API C++.
 Contributions are licensed to the GENIVI Alliance under one or more Contribution License Agreements or MPL 2.0.

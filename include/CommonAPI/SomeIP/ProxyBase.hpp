@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -25,6 +25,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 class Address;
+class AddressTranslator;
 
 class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
         : public virtual CommonAPI::Proxy {
@@ -87,6 +88,18 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
              major_version_t major);
 
     COMMONAPI_EXPORT virtual bool init() = 0;
+
+    COMMONAPI_EXPORT void registerEvent(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            event_id_t eventId,
+            eventgroup_id_t eventGroupId,
+            bool isField);
+
+    COMMONAPI_EXPORT void unregisterEvent(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            event_id_t eventId);
  protected:
     const std::string commonApiDomain_;
 
@@ -97,6 +110,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
 
     std::set<event_id_t> eventHandlerAdded_;
     std::mutex eventHandlerAddedMutex_;
+    std::shared_ptr<AddressTranslator> addressTranslator_;
 };
 
 const std::shared_ptr< ProxyConnection >& ProxyBase::getConnection() const {

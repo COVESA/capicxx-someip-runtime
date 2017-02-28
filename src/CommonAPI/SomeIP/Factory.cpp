@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -15,18 +15,18 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-static std::weak_ptr<CommonAPI::Runtime> runtime__;
-
 INITIALIZER(FactoryInit) {
-    runtime__ = Runtime::get();
-    Runtime::get()->registerFactory("someip", Factory::get());
+    Factory::runtime_ = Runtime::get();
+    Factory::runtime_.lock()->registerFactory("someip", Factory::get());
 }
 
 DEINITIALIZER(FactoryDeinit) {
-    if (auto rt = runtime__.lock()) {
+    if (auto rt = Factory::runtime_.lock()) {
         rt->unregisterFactory("someip");
     }
 }
+
+std::weak_ptr<CommonAPI::Runtime> Factory::runtime_;
 
 std::shared_ptr<Factory>
 Factory::get() {
@@ -42,7 +42,7 @@ Factory::~Factory() {
 
 void
 Factory::init() {
-#ifndef WIN32
+#ifndef _WIN32
 	std::lock_guard<std::mutex> itsLock(initializerMutex_);
 #endif
 	if (!isInitialized_) {
@@ -54,7 +54,7 @@ Factory::init() {
 
 void
 Factory::registerInterface(InterfaceInitFunction _function) {
-#ifndef WIN32
+#ifndef _WIN32
 	std::lock_guard<std::mutex> itsLock(initializerMutex_);
 #endif
 	if (isInitialized_) {

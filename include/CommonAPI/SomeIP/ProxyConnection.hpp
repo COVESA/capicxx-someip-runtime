@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -144,7 +144,7 @@ class ProxyConnection {
     virtual void queueSelectiveErrorHandler(service_id_t serviceId,
                                           instance_id_t instanceId) = 0;
 
-    virtual void getInitialEvent(service_id_t serviceId,
+    virtual void subscribeForField(service_id_t serviceId,
                                  instance_id_t instanceId,
                                  eventgroup_id_t eventGroupId,
                                  event_id_t eventId,

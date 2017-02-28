@@ -1,17 +1,19 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <CommonAPI/SomeIP/ProxyBase.hpp>
 #include <CommonAPI/SomeIP/Message.hpp>
+#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
 
 ProxyBase::ProxyBase(const std::shared_ptr< ProxyConnection > &connection)
     : commonApiDomain_("local"),
-      connection_(connection) {
+      connection_(connection),
+      addressTranslator_(AddressTranslator::get()) {
 }
 
 Message ProxyBase::createMethodCall(const method_id_t _method, bool _reliable) const {
@@ -78,6 +80,22 @@ void ProxyBase::subscribeForSelective(
              uint32_t _tag,
              major_version_t major) {
     connection_->subscribeForSelective(serviceId, instanceId, eventGroupId, vsomeip::ANY_EVENT, eventHandler, _tag, major);
+}
+
+void ProxyBase::registerEvent(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            event_id_t eventId,
+            eventgroup_id_t eventGroupId,
+            bool isField) {
+    connection_->requestEvent(serviceId, instanceId, eventId, eventGroupId, isField);
+}
+
+void ProxyBase::unregisterEvent(
+            service_id_t serviceId,
+            instance_id_t instanceId,
+            event_id_t eventId) {
+    connection_->releaseEvent(serviceId, instanceId, eventId);
 }
 
 } // namespace SomeIP

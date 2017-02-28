@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -27,8 +27,10 @@ void StubManager::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();
 
-    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
-    registeredStubAdapters_[service][instance] = _adapter;
+    {
+        std::lock_guard<std::mutex> lock(registeredStubAdaptersMutex_);
+        registeredStubAdapters_[service][instance] = _adapter;
+    }
     connection->registerService(itsAddress);
 }
 
@@ -38,26 +40,38 @@ void StubManager::unregisterStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();
 
-    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
-    auto foundService = registeredStubAdapters_.find(service);
-    if(foundService != registeredStubAdapters_.end()) {
-        auto foundInstance = foundService->second.find(instance);
-        if (foundInstance != foundService->second.end()) {
-            foundService->second.erase(instance);
-            connection->unregisterService(itsAddress);
+    bool erased(false);
+    {
+        std::lock_guard<std::mutex> lock(registeredStubAdaptersMutex_);
+        auto foundService = registeredStubAdapters_.find(service);
+        if(foundService != registeredStubAdapters_.end()) {
+            auto foundInstance = foundService->second.find(instance);
+            if (foundInstance != foundService->second.end()) {
+                foundService->second.erase(instance);
+                erased = true;
+            }
         }
+    }
+    if (erased) {
+        connection->unregisterService(itsAddress);
     }
 }
 
 bool StubManager::handleMessage(const Message &_message) {
-    std::lock_guard<std::recursive_mutex> lock(registeredStubAdaptersMutex_);
-    auto foundService = registeredStubAdapters_.find(_message.getServiceId());
-    if(foundService != registeredStubAdapters_.end()) {
-        auto foundInstance = foundService->second.find(_message.getInstanceId());
-        if (foundInstance != foundService->second.end()) {
-            std::shared_ptr<StubAdapter> foundStubAdapter = foundInstance->second;
-            return foundStubAdapter->onInterfaceMessage(_message);
+    std::shared_ptr<StubAdapter> foundStubAdapter;
+    {
+        std::lock_guard<std::mutex> lock(registeredStubAdaptersMutex_);
+        auto foundService = registeredStubAdapters_.find(_message.getServiceId());
+        if(foundService != registeredStubAdapters_.end()) {
+            auto foundInstance = foundService->second.find(_message.getInstanceId());
+            if (foundInstance != foundService->second.end()) {
+                foundStubAdapter = foundInstance->second;
+            }
         }
+    }
+
+    if (foundStubAdapter) {
+        return foundStubAdapter->onInterfaceMessage(_message);
     }
     return false;
 }

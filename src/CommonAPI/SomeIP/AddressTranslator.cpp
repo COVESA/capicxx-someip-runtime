@@ -1,9 +1,9 @@
-// Copyright (C) 2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2015-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <Windows.h>
 #else
 #include <unistd.h>
@@ -17,7 +17,7 @@
 #include <CommonAPI/IniFileReader.hpp>
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/AddressTranslator.hpp>
-#include <CommonAPI/SomeIP/Config.hpp>
+#include <CommonAPI/SomeIP/Constants.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -25,7 +25,7 @@ namespace SomeIP {
 const char *COMMONAPI_SOMEIP_DEFAULT_CONFIG_FILE = "commonapi-someip.ini";
 const char *COMMONAPI_SOMEIP_DEFAULT_CONFIG_FOLDER = "/etc/";
 
-#ifdef WIN32
+#ifdef _WIN32
 CRITICAL_SECTION critSec;
 #endif
 
@@ -41,7 +41,7 @@ AddressTranslator::AddressTranslator() {
 
 void
 AddressTranslator::init() {
-#ifdef WIN32
+#ifdef _WIN32
     InitializeCriticalSection(&critSec);
 #endif
     // Determine default configuration file
@@ -59,7 +59,7 @@ AddressTranslator::init() {
 
 AddressTranslator::~AddressTranslator()
 {
-#ifdef WIN32
+#ifdef _WIN32
     DeleteCriticalSection(&critSec);
 #endif
 }
@@ -72,7 +72,7 @@ AddressTranslator::translate(const std::string &_key, Address &_value) {
 bool
 AddressTranslator::translate(const CommonAPI::Address &_key, Address &_value) {
     bool result(true);
-#ifdef WIN32
+#ifdef _WIN32
     EnterCriticalSection(&critSec);
 #else
     std::lock_guard<std::mutex> itsLock(mutex_);
@@ -86,7 +86,7 @@ AddressTranslator::translate(const CommonAPI::Address &_key, Address &_value) {
             "CommonAPI address \"", _key, "\"");
         result = false;
     }
-#ifdef WIN32
+#ifdef _WIN32
     LeaveCriticalSection(&critSec);
 #endif
     return result;
@@ -103,7 +103,7 @@ AddressTranslator::translate(const Address &_key, std::string &_value) {
 bool
 AddressTranslator::translate(const Address &_key, CommonAPI::Address &_value) {
     bool result(true);
-#ifdef WIN32
+#ifdef _WIN32
     EnterCriticalSection(&critSec);
 #else
     std::lock_guard<std::mutex> itsLock(mutex_);
@@ -117,7 +117,7 @@ AddressTranslator::translate(const Address &_key, CommonAPI::Address &_value) {
             "SOME/IP address \"", _key, "\"");
         result = false;
     }
-#ifdef WIN32
+#ifdef _WIN32
     LeaveCriticalSection(&critSec);
 #endif
     return result;
@@ -131,7 +131,7 @@ AddressTranslator::insert(
     if (isValidService(_service) && isValidInstance(_instance)) {
         CommonAPI::Address address(_address);
         Address someipAddress(_service, _instance, _major, _minor);
-#ifdef WIN32
+#ifdef _WIN32
         EnterCriticalSection(&critSec);
 #else
         std::lock_guard<std::mutex> itsLock(mutex_);
@@ -152,7 +152,7 @@ AddressTranslator::insert(
                     "already mapped to a SomeIP address: ",
                     _address, " <--> ", someipAddress);
         }
-#ifdef WIN32
+#ifdef _WIN32
     LeaveCriticalSection(&critSec);
 #endif
     }
@@ -163,7 +163,7 @@ AddressTranslator::readConfiguration() {
 #define MAX_PATH_LEN 255
     std::string config;
     char currentDirectory[MAX_PATH_LEN];
-#ifdef WIN32
+#ifdef _WIN32
     if (GetCurrentDirectory(MAX_PATH_LEN, currentDirectory)) {
 #else
     if (getcwd(currentDirectory, MAX_PATH_LEN)) {
@@ -196,7 +196,6 @@ AddressTranslator::readConfiguration() {
 
         instance_id_t instance;
         std::string instanceEntry = itsMapping.second->getValue("instance");
-
         converter.str("");
         converter.clear();
         if (0 == instanceEntry.find("0x")) {
@@ -231,7 +230,7 @@ AddressTranslator::readConfiguration() {
 
 bool
 AddressTranslator::isValidService(const service_id_t _service) const {
-    if (_service < SOMEIP_MIN_SERVICE_ID || _service > SOMEIP_MAX_SERVICE_ID) {
+    if (_service < MIN_SERVICE_ID || _service > MAX_SERVICE_ID) {
         COMMONAPI_ERROR(
             "Found invalid service identifier (", _service, ")");
         return false;
@@ -242,7 +241,7 @@ AddressTranslator::isValidService(const service_id_t _service) const {
 
 bool
 AddressTranslator::isValidInstance(const instance_id_t _instance) const {
-    if (_instance < SOMEIP_MIN_INSTANCE_ID || _instance > SOMEIP_MAX_INSTANCE_ID) {
+    if (_instance < MIN_INSTANCE_ID || _instance > MAX_INSTANCE_ID) {
         COMMONAPI_ERROR(
             "Found invalid instance identifier (", _instance, ")");
         return false;

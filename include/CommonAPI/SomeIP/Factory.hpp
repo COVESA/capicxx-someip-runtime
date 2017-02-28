@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -24,6 +24,9 @@
 #include <CommonAPI/SomeIP/Types.hpp>
 
 namespace CommonAPI {
+
+class Runtime;
+
 namespace SomeIP {
 
 class Address;
@@ -107,6 +110,8 @@ public:
 
     // Initialization
     COMMONAPI_EXPORT void registerInterface(InterfaceInitFunction _function);
+
+    static std::weak_ptr<CommonAPI::Runtime> runtime_;
 
 private:
     COMMONAPI_EXPORT void incrementConnection(

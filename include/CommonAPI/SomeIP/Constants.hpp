@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2013-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -22,8 +22,17 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+const method_id_t ANY_METHOD = vsomeip::ANY_METHOD;
+const minor_version_t ANY_MINOR_VERSION  = vsomeip::ANY_MINOR;
+
 const major_version_t DEFAULT_MAJOR_VERSION = vsomeip::DEFAULT_MAJOR;
 const minor_version_t DEFAULT_MINOR_VERSION = vsomeip::DEFAULT_MINOR;
+
+const service_id_t MIN_SERVICE_ID = 0x0001;
+const service_id_t MAX_SERVICE_ID = 0xFFFD;
+
+const instance_id_t MIN_INSTANCE_ID = 0x0001;
+const instance_id_t MAX_INSTANCE_ID = 0xFFFE;
 
 const ms_t ASYNC_MESSAGE_REPLY_TIMEOUT_MS = 5000;
 const ms_t ASYNC_MESSAGE_CLEANUP_INTERVAL_MS = 1000;

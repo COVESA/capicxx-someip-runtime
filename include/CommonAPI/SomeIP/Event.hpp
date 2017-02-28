@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -42,6 +42,8 @@ public:
           getMethodId_(0),
           getReliable_(false),
           arguments_(_arguments) {
+
+        proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_, isField_);
     }
 
     Event(ProxyBase &_proxy,
@@ -63,12 +65,15 @@ public:
           getMethodId_(_methodId),
           getReliable_(_getReliable),
           arguments_(_arguments) {
+
+        proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_, isField_);
     }
 
     virtual ~Event() {
         auto major = proxy_.getSomeIpAddress().getMajorVersion();
         auto minor = proxy_.getSomeIpAddress().getMinorVersion();
         proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
+        proxy_.unregisterEvent(serviceId_, instanceId_, eventId_);
     }
 
     virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {

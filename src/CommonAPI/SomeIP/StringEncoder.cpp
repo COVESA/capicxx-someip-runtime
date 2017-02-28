@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -205,7 +205,7 @@ bool StringEncoder::isUtf8Valid(byte_t *_utf8Str)
 {
     while (*_utf8Str != '\0')
     {
-        EncodingStatus status;
+        EncodingStatus status = EncodingStatus::UNKNOWN;
         getNextBytes(&_utf8Str, status);
         if (status != EncodingStatus::SUCCESS)
             return false;
