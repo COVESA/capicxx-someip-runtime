@@ -1,5 +1,8 @@
 Changes
 =======
+v3.1.11.3
+- Fixed reading empty unions
+
 v3.1.11.2
 - Fixed Encoding/Decoding of bit-optimized values
 - Fixed event's errorListener was not always called on subscription

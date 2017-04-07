@@ -200,6 +200,7 @@ public:
             DeleteVisitor<maxSize> visitor(_value.valueStorage_);
             ApplyVoidVisitor<DeleteVisitor<maxSize>,
                 Variant<Types_...>, Types_... >::visit(visitor, _value);
+            _value.valueType_ = 0;
         }
 
         uint32_t itsSize;
