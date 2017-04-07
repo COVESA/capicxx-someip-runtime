@@ -243,9 +243,9 @@ public:
                     errorOccurred_ = true;
                 } else {
                     paddingCount = _depl->unionMaxLength_ - remainingCount;
-                }                
+                }
             }
-            
+
             if (!errorOccurred_) {
                 (void)_readRaw(paddingCount);
             }
@@ -348,7 +348,9 @@ public:
 
                 _value.insert(MapElement(std::move(itsKey), std::move(itsValue)));
 
-                itsSize -= uint32_t(remainingBeforeRead - remaining_);
+                if (mapLengthWidth != 0) {
+                    itsSize -= uint32_t(remainingBeforeRead - remaining_);
+                }
             }
         }
 
@@ -469,11 +471,12 @@ public:
     template<typename Type_>
     COMMONAPI_EXPORT bool _readBitValue(Type_ &_value, uint8_t _bits, bool _isSigned) {
         bool isError(false);
+        bool isLittleEndian = static_cast<bool>(buffer_[0]);
+
         union {
             Type_ typed_;
             char raw_[sizeof(Type_)];
         } value;
-
         std::memset(value.raw_, 0, sizeof(Type_));
 
         if (remaining_ < size_t(_bits >> 3)) {
@@ -481,101 +484,154 @@ public:
         } else {
             if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_)-1]);
-                for (size_t i = 0; i < sizeof(Type_); ++i) {
-                    *target-- = *current_++;
+                if (isLittleEndian) {
+                    std::memcpy(value.raw_, current_, sizeof(Type_));
+                    current_ += sizeof(Type_);
+                } else {
+                    byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_)-1]);
+                    for (size_t i = 0; i < sizeof(Type_); ++i) {
+                        *target-- = *current_++;
+                    }
                 }
 #else
-                std::memcpy(value.raw_, current_, sizeof(Type_));
-                current_ += sizeof(Type_);
+                if (isLittleEndian) {
+                    byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_)-1]);
+                    for (size_t i = 0; i < sizeof(Type_); ++i) {
+                        *target-- = *current_++;
+                    }
+                } else {
+                    std::memcpy(value.raw_, current_, sizeof(Type_));
+                    current_ += sizeof(Type_);
+                }
 #endif
                 remaining_ -= sizeof(Type_);
             } else {
                 bool isNegative(false);
-                byte_t itsMask;
+
+                byte_t itsMask(0x00);
                 byte_t itsValue;
 
-                byte_t currentByte(0x00);
+                byte_t itsCurrentByte(0x0);
+                std::size_t itsCurrentCount(1);
+
+                byte_t itsSignedInitializer(0x0);
+
+                // For signed values, the highest bit must be checked to determine
+                // whether the value is positive or negative
                 if (_isSigned) {
-                    itsMask = byte_t(0x1 << (7 - currentBit_));
-                    if ((*current_) & itsMask) {
-                        isNegative = true;
-                        std::memset(value.raw_, 0xFF, sizeof(Type_));
-                        currentByte = 0x80;
+                    std::size_t itsHighestByte(0);
+
+                    // Calculate the remaining bits after the current byte
+                    int8_t numberOfBits = int8_t(_bits - (8 - currentBit_));
+
+                    // Calculate the mask for the sign bit
+                    itsMask = byte_t(0x1 << (numberOfBits > 0 ?
+                            ((numberOfBits - 1) % 8) :
+                            ((currentBit_ + _bits - 1) % 8)));
+
+                    // Build the initializer for the highest byte of the target value
+                    itsSignedInitializer = byte_t(0xFF << ((_bits-1) % 8));
+
+                    // Find the highest byte
+                    while (numberOfBits > 0) {
+                        itsHighestByte = std::size_t(itsHighestByte + 1);
+                        numberOfBits = int8_t(numberOfBits - 8);
                     }
 
-                    _bits--;
-                    currentBit_++;
-                    if (currentBit_ == 8) {
-                        currentBit_ = 0;
-                        current_++;
-                        remaining_--;
+                    // Check the sign bit
+                    byte_t *itsSignedByte = current_ + itsHighestByte;
+                    if ((*itsSignedByte) & itsMask) {
+                        isNegative = true;
+                        // Toggle the bits for negative values
+                        std::memset(value.raw_, 0xFF, sizeof(Type_));
+
+                        // If the first byte also is the last,
+                        // initialize it with the calculated initializer
+                        if (itsCurrentCount == sizeof(Type_))
+                            itsCurrentByte = itsSignedInitializer;
                     }
                 }
 
-                std::size_t firstUsedByte(((sizeof(Type_) << 3) - _bits) >> 3);
-
+                // Set the target (TODO: Add isLittleEndian_ member and use it here)
+                byte_t *target(nullptr);
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_)-1 - firstUsedByte]);
+                if (isLittleEndian)
+                    target = reinterpret_cast<byte_t *>(&value.raw_[0]);
+                else
+                    target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_) - 1]);
 #else
-                byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[firstUsedByte]);
+                if (isLittleEndian)
+                    target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_) - 1]);
+                else
+                    target = reinterpret_cast<byte_t *>(&value.raw_[0]);
 #endif
 
-                uint8_t writePosition = uint8_t((8 - (_bits % 8)) % 8);
-                if (isNegative) {
-                    for (uint8_t i = 1; i < writePosition; i++) {
-                        byte_t itsBit = byte_t(0x01 << (7 - i));
-                        currentByte |= itsBit;
-                    }
-                }
-
+                uint8_t writePosition = 0;
                 while (_bits > 0) {
+                    // Determine the number of bits to copy
                     uint8_t maxRead = uint8_t(8 - currentBit_);
                     uint8_t maxWrite = uint8_t(8 - writePosition);
                     if (maxWrite > _bits) maxWrite = _bits;
-
                     uint8_t numCopy = (maxRead < maxWrite ? maxRead : maxWrite);
 
-                    itsMask = byte_t(0xFF << (8 - numCopy));
-                    itsMask = byte_t(itsMask >> currentBit_);
-                    itsValue = ((*current_) & itsMask);
+                    // Calculate the mask to access the bits
+                    itsMask = byte_t(0xFF >> (8 - numCopy));
+                    itsMask = byte_t(itsMask << currentBit_);
 
-                    if (currentBit_ <= writePosition) {
-                        itsValue = byte_t(itsValue >> (writePosition - currentBit_));
+                    // Get the value
+                    itsValue = ((*current_) & itsMask);
+                    if (writePosition < currentBit_) {
+                        itsValue = byte_t(itsValue >> (currentBit_ - writePosition));
                     } else {
-                        itsValue = byte_t(itsValue << (currentBit_ - writePosition));
+                        itsValue = byte_t(itsValue << (writePosition - currentBit_));
                     }
 
-                    currentByte |= itsValue;
+                    // Update the current byte
+                    itsCurrentByte |= itsValue;
 
+                    // Wrap if all bits of the current source byte are consumed
                     _bits = uint8_t(_bits - numCopy);
                     currentBit_ = uint8_t(currentBit_ + numCopy);
                     if (currentBit_ == uint8_t(8)) {
                         current_++;
                         currentBit_ = 0;
                         remaining_--;
+                        itsCurrentCount++;
                     }
 
+                    // Update the write position and the target pointer
                     writePosition = uint8_t(writePosition + numCopy);
-                    if (writePosition == uint8_t(8)) {
+                    if (writePosition == uint8_t(8) || _bits == 0) {
                         if (isNegative) {
-                            (*target) &= currentByte;
+                            (*target) &= itsCurrentByte;
                         } else {
-                            (*target) |= currentByte;
+                            (*target) |= itsCurrentByte;
                         }
-                        currentByte = 0x0;
-
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                        target--;
+                        if (isLittleEndian)
+                            target++;
+                        else
+                            target--;
 #else
-                        target++;
+                        if (isLittleEndian)
+                            target--;
+                        else
+                            target++;
 #endif
                         writePosition = 0;
+
+                        // Reset current byte
+                        if (isNegative && itsCurrentCount == sizeof(Type_)) {
+                            itsCurrentByte = itsSignedInitializer;
+                        } else {
+                            itsCurrentByte = 0;
+                        }
                     }
                 }
             }
         }
 
+        // Return the target value
          _value = value.typed_;
 
          return (isError);

@@ -212,10 +212,15 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
                                     void* _data) {
     (void)_proxy;
     (void)_data;
+    bool queueSelective(false);
     {
         std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
         {
             std::lock_guard<std::mutex> itsLock(availabilityMutex_);
+            if (availabilityStatus_ == AvailabilityStatus::AVAILABLE && !isAvailable) {
+                // Only queue selective error handlers for implicitly re-subscribing!
+                queueSelective = true;
+            }
             const AvailabilityStatus itsStatus(
                     isAvailable ? AvailabilityStatus::AVAILABLE :
                             AvailabilityStatus::NOT_AVAILABLE);
@@ -230,7 +235,7 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
         availabilityTimeoutCondition_.notify_all();
         availabilityTimeoutThreadMutex_.unlock();
 
-        if (!isAvailable)
+        if (queueSelective)
             getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
 
         for(auto listenerIt : proxyStatusEvent_.listeners_)

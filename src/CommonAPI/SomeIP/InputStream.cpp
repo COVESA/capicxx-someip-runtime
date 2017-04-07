@@ -25,13 +25,7 @@ InputStream::InputStream(const CommonAPI::SomeIP::Message &_message,
       remaining_(_message.getBodyLength()),
       message_(_message),
       errorOccurred_(false) {
-
-    if (_isLittleEndian) {
-        buffer_.assign(_message.getBodyData(), _message.getBodyData() + _message.getBodyLength());
-        std::reverse(buffer_.begin(), buffer_.end());
-        current_ = &buffer_[0];
-    }
-
+    buffer_.push_back(static_cast<byte_t>(_isLittleEndian));
 }
 
 InputStream::~InputStream() {}

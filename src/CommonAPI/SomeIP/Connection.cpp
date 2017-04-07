@@ -544,6 +544,7 @@ void Connection::removeEventHandler(
         minor_version_t minor) {
     (void)major;
     (void)minor;
+    bool lastSubscriber(false);
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     auto foundService = eventHandlers_.find(serviceId);
     if (foundService != eventHandlers_.end()) {
@@ -565,6 +566,7 @@ void Connection::removeEventHandler(
                             if (g->second > 0)
                                 g->second--;
                             if(g->second == 0) {
+                                lastSubscriber = true;
                                 application_->unsubscribe(serviceId, instanceId, eventGroupId, eventId);
                             }
                         }
@@ -574,43 +576,43 @@ void Connection::removeEventHandler(
         }
     }
 
-    auto foundPendingService = subscriptions_.find(serviceId);
-    if (foundPendingService != subscriptions_.end()) {
-        auto foundPendingInstance = foundPendingService->second.find(instanceId);
-        if (foundPendingInstance != foundPendingService->second.end()) {
-            foundPendingInstance->second.erase(eventId);
-            if (foundPendingInstance->second.size() == 0) {
-                foundPendingService->second.erase(foundPendingInstance);
-                if (foundPendingService->second.size() == 0)
-                    subscriptions_.erase(foundPendingService);
-            }
-        }
-    }
-
-    auto foundService2 = inital_event_requests.find(serviceId);
-    if (foundService2 != inital_event_requests.end()) {
-        auto foundInstance = foundService2->second.find(instanceId);
-        if (foundInstance != foundService2->second.end()) {
-            foundInstance->second.clear();
-        }
-    }
-
     auto it_service = pendingSelectiveErrorHandlers_.find(serviceId);
     if (it_service != pendingSelectiveErrorHandlers_.end()) {
         auto it_instance = it_service->second.find(instanceId);
         if (it_instance != it_service->second.end()) {
-            it_instance->second.erase(eventGroupId);
-            if (it_instance->second.size() == 0) {
-                it_service->second.erase(instanceId);
-                if (it_service->second.size() == 0) {
-                    pendingSelectiveErrorHandlers_.erase(serviceId);
+            auto its_eventgroup = it_instance->second.find(eventGroupId);
+            if (its_eventgroup != it_instance->second.end()) {
+                its_eventgroup->second.erase(eventHandler);
+                if (its_eventgroup->second.size() == 0) {
+                    it_instance->second.erase(eventGroupId);
+                    if (it_instance->second.size() == 0) {
+                        it_service->second.erase(instanceId);
+                        if (it_service->second.size() == 0) {
+                            pendingSelectiveErrorHandlers_.erase(serviceId);
+                        }
+                    }
                 }
             }
         }
     }
 
-    application_->unregister_subscription_error_handler(serviceId, instanceId,
-            eventGroupId);
+    if (lastSubscriber) {
+        auto foundPendingService = subscriptions_.find(serviceId);
+        if (foundPendingService != subscriptions_.end()) {
+            auto foundPendingInstance = foundPendingService->second.find(instanceId);
+            if (foundPendingInstance != foundPendingService->second.end()) {
+                foundPendingInstance->second.erase(eventId);
+                if (foundPendingInstance->second.size() == 0) {
+                    foundPendingService->second.erase(foundPendingInstance);
+                    if (foundPendingService->second.size() == 0)
+                        subscriptions_.erase(foundPendingService);
+                }
+            }
+        }
+
+        application_->unregister_subscription_error_handler(serviceId, instanceId,
+                eventGroupId);
+    }
 }
 
 void Connection::subscribeForSelective(

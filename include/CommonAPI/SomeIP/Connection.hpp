@@ -304,10 +304,6 @@ private:
                     std::map<event_id_t, std::set<eventgroup_id_t> > > > subscriptions_map_t;
     subscriptions_map_t subscriptions_;
 
-    typedef std::tuple<Message, std::weak_ptr<ProxyConnection::EventHandler>, uint32_t> inital_event_tuple_t;
-    std::map<service_id_t,
-                std::map<instance_id_t, std::vector<inital_event_tuple_t> > > inital_event_requests;
-
     uint32_t activeConnections_;
     std::mutex activeConnectionsMutex_;
 

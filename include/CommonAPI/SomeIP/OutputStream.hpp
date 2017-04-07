@@ -394,17 +394,32 @@ public:
             Type_ typed_;
             byte_t raw_[sizeof(Type_)];
         } value;
+
+        // Initialize the source value
         value.typed_ = _value;
 
         if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
         #if __BYTE_ORDER == __LITTLE_ENDIAN
-            byte_t *source = &value.raw_[sizeof(Type_)-1];
-            for (size_t i = 0; i < sizeof(Type_); ++i) {
-                _writeRaw(*source--);
+            if (isLittleEndian_) {
+                for (size_t i = 0; i < sizeof(Type_); ++i) {
+                    _writeRaw(value.raw_[i]);
+                }
+            } else {
+                byte_t *source = &value.raw_[sizeof(Type_)-1];
+                for (size_t i = 0; i < sizeof(Type_); ++i) {
+                    _writeRaw(*source--);
+                }
             }
         #else
-            for (size_t i = 0; i < sizeof(Type_); ++i) {
-                _writeRaw(value.raw_[i]);
+            if (isLittleEndian_) {
+                byte_t *source = &value.raw_[sizeof(Type_)-1];
+                for (size_t i = 0; i < sizeof(Type_); ++i) {
+                    _writeRaw(*source--);
+                }
+            } else {
+                for (size_t i = 0; i < sizeof(Type_); ++i) {
+                    _writeRaw(value.raw_[i]);
+                }
             }
         #endif
         } else {
@@ -414,69 +429,67 @@ public:
                 return (*this);
             }
 
-            byte_t * source;
-            if (_is_signed) {
-                #if __BYTE_ORDER == __LITTLE_ENDIAN
-                source = &value.raw_[sizeof(Type_) - 1];
-                #else
-                source = &value.raw_[0];
-                #endif
-                byte_t isSigned(((*source) & 0x80) ? byte_t(0x1) : byte_t(0x0));
-                isSigned = byte_t(isSigned << (7 - currentBit_));
-                currentByte_ |= isSigned;
-
-                _bits--;
-                currentBit_++;
-                if (currentBit_ == 8) {
-                    currentBit_ = 0;
-                    _writeRaw(currentByte_);
-                    currentByte_ = 0;
-                }
-            }
-
+            // Set the source pointer dependend on the byte orders
+            byte_t * source(nullptr);
             std::size_t firstUsedByte(((sizeof(Type_) << 3) - _bits) >> 3);
             #if __BYTE_ORDER == __LITTLE_ENDIAN
-            source = &value.raw_[sizeof(Type_) - 1 - firstUsedByte];
+            if (isLittleEndian_)
+                source = &value.raw_[firstUsedByte];
+            else
+                source = &value.raw_[sizeof(Type_) - 1 - firstUsedByte];
             #else
-            source = &value.raw_[firstUsedByte];
+            if (isLittleEndian_)
+                source = &value.raw_[sizeof(Type_) - 1 - firstUsedByte];
+            else
+                source = &value.raw_[firstUsedByte];
             #endif
 
-            uint8_t readPosition = uint8_t((8 - (_bits % 8)) % 8);
+            uint8_t readPosition = 0;
             while (_bits > 0) {
-                uint8_t maxRead = uint8_t(8 - readPosition);
+                // Determine number of bits to copy
+                uint8_t maxRead = uint8_t(_bits < (8 - readPosition) ? _bits : (8 - readPosition));
                 uint8_t maxWrite = uint8_t(8 - currentBit_);
-                uint8_t numCopy = (maxRead < maxWrite ? maxRead : maxWrite);
+                uint8_t numCopy = uint8_t(maxRead < maxWrite ? maxRead : maxWrite);
 
-                byte_t itsMask = byte_t(0xFF << (8 - numCopy));
-                itsMask = byte_t(itsMask >> readPosition);
+                // Calculate mask to access the bits
+                byte_t itsMask = byte_t(0xFF >> (8 - numCopy));
+                itsMask = byte_t(itsMask << readPosition);
 
-                byte_t itsValue = ((*source) & itsMask);
+                // Get the value
+                byte_t itsValue = uint8_t((*source) & itsMask);
+                if (currentBit_ > readPosition)
+                    itsValue = byte_t(itsValue << (currentBit_ - readPosition));
+                else
+                    itsValue = byte_t(itsValue >> (readPosition - currentBit_));
 
-                if (readPosition < currentBit_) {
-                    itsValue = byte_t(itsValue >> (currentBit_ - readPosition));
-                } else {
-                    itsValue = byte_t(itsValue << (readPosition - currentBit_));
-                }
-
+                // Add value to current byte
                 currentByte_ |= itsValue;
 
-                // update the positions
+                // Update number of remaining bits
                 _bits = uint8_t(_bits - numCopy);
-                currentBit_ = uint8_t(currentBit_ + numCopy);
 
+                // Wrap if necessary
+                currentBit_ = uint8_t(currentBit_ + numCopy);
                 if (currentBit_ == 8) {
-                    currentBit_ = 0;
                     _writeRaw(currentByte_);
+                    currentBit_ = 0;
                     currentByte_ = 0;
                 }
 
+                // Update source pointer if the current byte was consumed
                 readPosition = uint8_t(readPosition + numCopy);
                 if (readPosition == 8) {
                     readPosition = 0;
                     #if __BYTE_ORDER == __LITTLE_ENDIAN
-                    source--;
+                    if (isLittleEndian_)
+                        source++;
+                    else
+                        source--;
                     #else
-                    source++;
+                    if (isLittleEndian_)
+                        source--;
+                    else
+                        source++;
                     #endif
                 }
             }

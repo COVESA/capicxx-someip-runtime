@@ -210,8 +210,10 @@ void Watch::removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSo
 }
 
 void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
-    std::unique_lock<std::mutex> itsLock(queueMutex_);
-    queue_.push(_queueEntry);
+    {
+        std::unique_lock<std::mutex> itsLock(queueMutex_);
+        queue_.push(_queueEntry);
+    }
 
 #ifdef _WIN32
     // Send an initial buffer
@@ -233,8 +235,6 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
 }
 
 void Watch::popQueue() {
-    std::unique_lock<std::mutex> itsLock(queueMutex_);
-
 #ifdef _WIN32
     // Receive until the peer closes the connection
     int iResult;
@@ -258,7 +258,10 @@ void Watch::popQueue() {
     }
 #endif
 
-    queue_.pop();
+    {
+        std::unique_lock<std::mutex> itsLock(queueMutex_);
+        queue_.pop();
+    }
 }
 
 std::shared_ptr<QueueEntry> Watch::frontQueue() {

@@ -360,10 +360,6 @@ void OutputStream::flush() {
         currentBit_ = 0;
     }
 
-    if (isLittleEndian_) {
-        std::reverse(payload_.begin(), payload_.end());
-    }
-
     message_.setPayloadData((byte_t *)payload_.data(), uint32_t(payload_.size()));
 
     // clear
