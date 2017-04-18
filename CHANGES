@@ -1,5 +1,8 @@
 Changes
 =======
+v3.1.11.4
+- Fixed potential busy loop for mainloop applications
+
 v3.1.11.3
 - Fixed reading empty unions
 

@@ -228,8 +228,12 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
         }
     }
 #else
-    if(write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_)) == -1) {
-        std::perror(__func__);
+    while (write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_)) == -1) {
+        if (errno != EAGAIN && errno != EINTR) {
+            std::perror(__func__);
+            break;
+        }
+        std::this_thread::yield();
     }
 #endif
 }
@@ -253,8 +257,12 @@ void Watch::popQueue() {
     }
 #else
     int readValue = 0;
-    if(read(pipeFileDescriptors_[0], &readValue, sizeof(readValue)) == -1) {
-        std::perror(__func__);
+    while (read(pipeFileDescriptors_[0], &readValue, sizeof(readValue)) == -1) {
+        if (errno != EAGAIN && errno != EINTR) {
+            std::perror(__func__);
+            break;
+        }
+        std::this_thread::yield();
     }
 #endif
 
