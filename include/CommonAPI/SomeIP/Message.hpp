@@ -66,6 +66,9 @@ class Message {
 
     COMMONAPI_EXPORT void setPayloadData(const byte_t *data, message_length_t length);
 
+    COMMONAPI_EXPORT bool isValidCRC() const;
+
+
  private:
     std::shared_ptr<vsomeip::message> message_;
 

@@ -161,6 +161,14 @@ void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _inst
            bool _is_available) {
     {
         std::lock_guard<std::mutex> itsLock(availabilityCalledMutex_);
+        auto its_service = availabilityCalled_.find(_service);
+        if (its_service != availabilityCalled_.end()) {
+            auto its_instance = its_service->second.find(_instance);
+            if (its_instance != its_service->second.end() &&
+                    its_instance->second && !_is_available) {
+                queueSubscriptionStatusHandler(_service, _instance);
+            }
+        }
         availabilityCalled_[_service][_instance] = true;
     }
     if (auto lockedContext = mainLoopContext_.lock()) {
@@ -288,7 +296,9 @@ void Connection::cleanup() {
 }
 
 Connection::Connection(const std::string &_name)
-      : connectionStatus_(state_type_e::ST_DEREGISTERED),
+      : dispatchSource_(NULL),
+        watch_(NULL),
+        connectionStatus_(state_type_e::ST_DEREGISTERED),
         application_(vsomeip::runtime::get()->create_application(_name)),
         asyncAnswersCleanupThread_(NULL),
         cleanupCancelled_(false),
@@ -475,8 +485,8 @@ Message Connection::sendMessageWithReplyAndBlock(
 
     Message itsResult;
 
-    std::chrono::system_clock::time_point elapsed(
-            std::chrono::system_clock::now()
+    std::chrono::steady_clock::time_point elapsed(
+            std::chrono::steady_clock::now()
             + std::chrono::milliseconds(_info->timeout_));
 
     // Wait until the answer was received.
@@ -513,24 +523,17 @@ void Connection::addEventHandler(
         bool isField,
         bool isSelective) {
 
+    (void)major;
+    (void)isField;
+    (void)isSelective;
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     if(auto itsHandler = eventHandler.lock()) {
         eventHandlers_[serviceId][instanceId][eventId][itsHandler.get()] = eventHandler;
         const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
-
-        if(!isField || isSelective) {
-            subscriptionCounters_[serviceId][instanceId][eventId]++;
-        }
-
         if(inserted) {
-            if(isSelective) {
-                addSelectiveErrorListener(serviceId, instanceId, eventGroupId);
-            } else if(!isField) {
-                application_->subscribe(serviceId, instanceId, eventGroupId, major,
-                        vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
-            }
+            addSubscriptionStatusListener(serviceId, instanceId, eventGroupId,
+                    eventId);
         }
-
     }
 }
 
@@ -555,48 +558,23 @@ void Connection::removeEventHandler(
                 foundEventId->second.erase(eventHandler);
                 if (foundEventId->second.size() == 0) {
                     foundInstance->second.erase(foundEventId);
-                }
-                // decrement subscription counter for given event
-                auto s = subscriptionCounters_.find(serviceId);
-                if (s != subscriptionCounters_.end()) {
-                    auto i = s->second.find(instanceId);
-                    if (i != s->second.end()) {
-                        auto g = i->second.find(eventId);
-                        if (g != i->second.end()) {
-                            if (g->second > 0)
-                                g->second--;
-                            if(g->second == 0) {
-                                lastSubscriber = true;
-                                application_->unsubscribe(serviceId, instanceId, eventGroupId, eventId);
-                            }
-                        }
-                    }
+                    lastSubscriber = true;
+                    application_->unsubscribe(serviceId, instanceId,
+                            eventGroupId, eventId);
                 }
             }
         }
     }
 
-    auto it_service = pendingSelectiveErrorHandlers_.find(serviceId);
-    if (it_service != pendingSelectiveErrorHandlers_.end()) {
-        auto it_instance = it_service->second.find(instanceId);
-        if (it_instance != it_service->second.end()) {
-            auto its_eventgroup = it_instance->second.find(eventGroupId);
-            if (its_eventgroup != it_instance->second.end()) {
-                its_eventgroup->second.erase(eventHandler);
-                if (its_eventgroup->second.size() == 0) {
-                    it_instance->second.erase(eventGroupId);
-                    if (it_instance->second.size() == 0) {
-                        it_service->second.erase(instanceId);
-                        if (it_service->second.size() == 0) {
-                            pendingSelectiveErrorHandlers_.erase(serviceId);
-                        }
-                    }
-                }
-            }
-        }
+    auto its_tuple = std::make_tuple(serviceId, instanceId, eventGroupId, eventId);
+    auto its_wrapper = subscriptionStates_.find(its_tuple);
+    if (its_wrapper != subscriptionStates_.end()) {
+        its_wrapper->second->removeHandler(eventHandler);
     }
 
     if (lastSubscriber) {
+        subscriptionStates_.erase(its_tuple);
+
         auto foundPendingService = subscriptions_.find(serviceId);
         if (foundPendingService != subscriptions_.end()) {
             auto foundPendingInstance = foundPendingService->second.find(instanceId);
@@ -610,74 +588,61 @@ void Connection::removeEventHandler(
             }
         }
 
-        application_->unregister_subscription_error_handler(serviceId, instanceId,
-                eventGroupId);
+        application_->register_subscription_status_handler(serviceId, instanceId,
+                    eventGroupId, eventId, nullptr);
     }
 }
 
-void Connection::subscribeForSelective(
-        service_id_t serviceId, instance_id_t instanceId,
-        eventgroup_id_t eventGroupId, event_id_t eventId,
-        std::weak_ptr<ProxyConnection::EventHandler> eventHandler, uint32_t _tag,
-        major_version_t major) {
-    std::set<uint32_t> tags;
-    tags.insert(_tag);
+void Connection::subscribe(service_id_t serviceId, instance_id_t instanceId,
+                eventgroup_id_t eventGroupId, event_id_t eventId,
+                std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
+                uint32_t _tag, major_version_t major) {
 
-    std::unique_lock<std::mutex> lock(eventHandlerMutex_);
-    selectiveErrorHandlers_[serviceId][instanceId][eventGroupId].push(std::make_pair(eventHandler, tags));
-
-    if(auto itsHandler = eventHandler.lock()) {
-        auto itsTags = pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][itsHandler.get()].second;
-        itsTags.insert(_tag);
-        pendingSelectiveErrorHandlers_[serviceId][instanceId][eventGroupId][itsHandler.get()] = std::make_pair(eventHandler, itsTags);
-    }
+    insertSubscriptionStatusListener(serviceId, instanceId, eventGroupId, eventId,
+            eventHandler, _tag);
 
     application_->subscribe(serviceId, instanceId, eventGroupId, major,
-            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
+            vsomeip::subscription_type_e::SU_PREFER_RELIABLE, eventId);
 }
 
-void Connection::addSelectiveErrorListener(service_id_t serviceId,
+void Connection::addSubscriptionStatusListener(service_id_t serviceId,
         instance_id_t instanceId,
-        eventgroup_id_t eventGroupId) {
+        eventgroup_id_t eventGroupId,
+        event_id_t eventId) {
 
-    auto connection = shared_from_this();
-    auto errorHandler = [serviceId, instanceId, eventGroupId, connection, this] (
-                    const uint16_t errorCode) {
+    auto statusHandler = [this] (
+                const vsomeip::service_t _service, const vsomeip::instance_t _instance,
+                const vsomeip::eventgroup_t _eventgroup, const vsomeip::event_t _event,
+                const uint16_t errorCode) {
+
+        // SubscriptionStatusListenerCalled!
+        auto its_tuple = std::make_tuple(_service, _instance, _eventgroup, _event);
         std::unique_lock<std::mutex> lock(eventHandlerMutex_);
-        {
-            auto it_service = selectiveErrorHandlers_.find(serviceId);
-            if (it_service != selectiveErrorHandlers_.end()) {
-                auto it_instance = it_service->second.find(instanceId);
-                if (it_instance != it_service->second.end()) {
-                    auto it_eventgroup = it_instance->second.find(eventGroupId);
-                    if (it_eventgroup != it_instance->second.end()) {
-                        if (!it_eventgroup->second.empty()) {
-                            auto entry = it_eventgroup->second.front();
-                            it_eventgroup->second.pop();
-                            for (uint32_t tag : entry.second) {
-                                std::weak_ptr<ProxyConnection::EventHandler> handler = entry.first;
-                                if (auto lockedContext = mainLoopContext_.lock()) {
-                                    std::shared_ptr<ErrQueueEntry> err_queue_entry =
-                                            std::make_shared<ErrQueueEntry>(
-                                                    handler, errorCode, tag,
-                                                    serviceId, instanceId, eventGroupId);
-                                    watch_->pushQueue(err_queue_entry);
-                                } else {
-                                    if(auto itsHandler = handler.lock()) {
-                                        lock.unlock();
-                                        itsHandler->onError(errorCode, tag);
-                                        lock.lock();
-                                    }
-                                }
-                            }
+        SubscriptionStatusWrapper subscriptionStatus(_service, _instance, _eventgroup, _event);
+        auto its_wrapper = subscriptionStates_.find(its_tuple);
+        if (its_wrapper != subscriptionStates_.end()) {
+            while (!its_wrapper->second->pendingHandlerQueueEmpty()) {
+                auto entry = its_wrapper->second->popAndFrontPendingHandler();
+                    std::weak_ptr<ProxyConnection::EventHandler> handler = entry.first;
+                    if (auto lockedContext = mainLoopContext_.lock()) {
+                        std::shared_ptr<ErrQueueEntry> err_queue_entry =
+                                std::make_shared<ErrQueueEntry>(
+                                        handler, errorCode, entry.second,
+                                        _service, _instance, _eventgroup, _event);
+                        watch_->pushQueue(err_queue_entry);
+                    } else {
+                        if(auto itsHandler = handler.lock()) {
+                            lock.unlock();
+                            itsHandler->onError(errorCode, entry.second);
+                            lock.lock();
                         }
                     }
-                }
             }
         }
     };
-    application_->register_subscription_error_handler(serviceId, instanceId,
-                eventGroupId, errorHandler);
+    application_->register_subscription_status_handler(serviceId, instanceId,
+                eventGroupId, eventId, statusHandler);
+
 }
 
 bool
@@ -1009,26 +974,14 @@ void Connection::processAvblQueueEntry(AvblQueueEntry &_avblQueueEntry) {
 }
 
 void Connection::processErrQueueEntry(ErrQueueEntry &_errQueueEntry) {
+    auto its_tuple = std::make_tuple(_errQueueEntry.service_, _errQueueEntry.instance_,
+            _errQueueEntry.eventGroup_, _errQueueEntry.event_);
     std::lock_guard<std::mutex> lock(eventHandlerMutex_);
-    auto foundService = pendingSelectiveErrorHandlers_.find(_errQueueEntry.service_);
-    if (foundService != pendingSelectiveErrorHandlers_.end()) {
-        auto foundInstance = foundService->second.find(
-                _errQueueEntry.instance_);
-        if (foundInstance != foundService->second.end()) {
-            auto foundEventGroup = foundInstance->second.find(
-                    _errQueueEntry.eventGroup_);
-            if (foundEventGroup != foundInstance->second.end()) {
-                if(auto itsHandler = _errQueueEntry.eventHandler_.lock()) {
-                    auto foundEventHandlerPair = foundEventGroup->second.find(itsHandler.get());
-                    if (foundEventHandlerPair != foundEventGroup->second.end()) {
-                        auto foundSubscriptionId = foundEventHandlerPair->second.second.find(
-                                _errQueueEntry.tag_);
-                        if (foundSubscriptionId
-                                != foundEventHandlerPair->second.second.end()) {
-                            itsHandler->onError(_errQueueEntry.errorCode_, *foundSubscriptionId);
-                        }
-                    }
-                }
+    auto its_wrapper = subscriptionStates_.find(its_tuple);
+    if (its_wrapper != subscriptionStates_.end()) {
+        if(auto itsHandler = _errQueueEntry.eventHandler_.lock()) {
+            if (its_wrapper->second->hasHandler(itsHandler.get(), _errQueueEntry.tag_)) {
+                itsHandler->onError(_errQueueEntry.errorCode_, _errQueueEntry.tag_);
             }
         }
     }
@@ -1039,27 +992,24 @@ const ConnectionId_t& Connection::getConnectionId() {
 }
 
 void Connection::queueSelectiveErrorHandler(service_id_t serviceId,
+        instance_id_t instanceId) {
+    (void)serviceId;
+    (void)instanceId;
+
+    // Keep only for compatibility reasons
+}
+
+void Connection::queueSubscriptionStatusHandler(service_id_t serviceId,
                                               instance_id_t instanceId) {
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     auto findService = subscriptions_.find(serviceId);
     if (findService != subscriptions_.end()) {
         auto findInstance = findService->second.find(instanceId);
         if (findInstance != findService->second.end()) {
-            for (auto &e : findInstance->second) {
-                auto it_service = pendingSelectiveErrorHandlers_.find(serviceId);
-                if (it_service != pendingSelectiveErrorHandlers_.end()) {
-                    auto it_instance = it_service->second.find(instanceId);
-                    if (it_instance != it_service->second.end()) {
-                        for (auto group : e.second) {
-                            auto it_eventgroup = it_instance->second.find(group);
-                            if (it_eventgroup != it_instance->second.end()) {
-                                for (auto its_handler : it_eventgroup->second) {
-                                    selectiveErrorHandlers_[serviceId][instanceId][group].push(
-                                        std::make_pair(its_handler.second.first, its_handler.second.second));
-                                }
-                            }
-                        }
-                    }
+            for (const auto& its_tuple : subscriptionStates_) {
+                if (serviceId == std::get<0>(its_tuple.first) &&
+                        instanceId == std::get<1>(its_tuple.first)) {
+                    its_tuple.second->pushOnPendingHandlerQueue();
                 }
             }
         }
@@ -1074,19 +1024,6 @@ void Connection::registerSubsciptionHandler(const Address &_address,
 void Connection::unregisterSubsciptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup) {
     application_->unregister_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup);
-}
-
-void Connection::subscribeForField(service_id_t serviceId,
-                                 instance_id_t instanceId,
-                                 eventgroup_id_t eventGroupId,
-                                 event_id_t eventId,
-                                 major_version_t major) {
-    {
-        std::lock_guard<std::mutex> its_lock(eventHandlerMutex_);
-        subscriptionCounters_[serviceId][instanceId][eventId]++;
-    }
-    application_->subscribe(serviceId, instanceId, eventGroupId, major,
-            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
 }
 
 void Connection::incrementConnection() {
@@ -1138,6 +1075,22 @@ void Connection::getAvailableInstances(service_id_t _serviceId, std::vector<std:
                 _instances->push_back(capiAddressService.getInstance());
             }
         }
+    }
+}
+
+void Connection::insertSubscriptionStatusListener(service_id_t serviceId, instance_id_t instanceId,
+        eventgroup_id_t eventGroupId, event_id_t eventId,
+        std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
+        uint32_t _tag) {
+    auto itsTuple = std::make_tuple(serviceId, instanceId, eventGroupId, eventId);
+    std::unique_lock<std::mutex> lock(eventHandlerMutex_);
+    auto its_wrapper = subscriptionStates_.find(itsTuple);
+    if (its_wrapper != subscriptionStates_.end()) {
+        its_wrapper->second->addHandler(eventHandler, _tag);
+    } else {
+        auto subscriptionStatus = std::make_shared<SubscriptionStatusWrapper>(serviceId, instanceId, eventGroupId, eventId);
+        subscriptionStatus->addHandler(eventHandler, _tag);
+        subscriptionStates_[itsTuple] = subscriptionStatus;
     }
 }
 

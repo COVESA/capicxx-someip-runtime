@@ -22,6 +22,7 @@
 #include <CommonAPI/SomeIP/StubManager.hpp>
 #include <CommonAPI/SomeIP/DispatchSource.hpp>
 #include <CommonAPI/SomeIP/Watch.hpp>
+#include <CommonAPI/SomeIP/SubscriptionStatusWrapper.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -76,13 +77,15 @@ struct ErrQueueEntry : QueueEntry {
     ErrQueueEntry(std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
                   uint16_t _errorCode, uint32_t _tag,
                   service_id_t _service, instance_id_t _instance,
-                  eventgroup_id_t _eventGroup) :
+                  eventgroup_id_t _eventGroup,
+                  event_id_t _event) :
                       eventHandler_(_eventHandler),
                       errorCode_(_errorCode),
                       tag_(_tag),
                       service_(_service),
                       instance_(_instance),
-                      eventGroup_(_eventGroup) {}
+                      eventGroup_(_eventGroup),
+                      event_(_event) {}
     virtual ~ErrQueueEntry() {}
 
     std::weak_ptr<ProxyConnection::EventHandler> eventHandler_;
@@ -91,6 +94,7 @@ struct ErrQueueEntry : QueueEntry {
     service_id_t service_;
     instance_id_t instance_;
     eventgroup_id_t eventGroup_;
+    event_id_t event_;
 
     void process(std::shared_ptr<Connection> _connection);
 };
@@ -153,10 +157,6 @@ public:
             eventgroup_id_t eventGroupId, event_id_t eventId,
             ProxyConnection::EventHandler* _eventHandler,  major_version_t major, minor_version_t minor);
 
-    void subscribeForSelective(service_id_t serviceId, instance_id_t instanceId,
-            eventgroup_id_t eventGroupId, event_id_t eventId,
-            std::weak_ptr<ProxyConnection::EventHandler> _eventHandler, uint32_t _tag, major_version_t major);
-
     virtual bool attachMainLoopContext(std::weak_ptr<MainLoopContext>);
 
     virtual bool isAvailable(const Address &_address);
@@ -206,12 +206,6 @@ public:
     virtual void queueSelectiveErrorHandler(service_id_t serviceId,
                                               instance_id_t instanceId);
 
-    virtual void subscribeForField(service_id_t serviceId,
-                                 instance_id_t instanceId,
-                                 eventgroup_id_t eventGroupId,
-                                 event_id_t eventId,
-                                 major_version_t major);
-
     virtual void incrementConnection();
     virtual void decrementConnection();
 
@@ -222,6 +216,11 @@ public:
     void proxyPushFunctionToMainLoop(Function&& _function, Arguments&& ... _args);
 
     virtual void getAvailableInstances(service_id_t _serviceId, std::vector<std::string> *_instances);
+
+    void subscribe(service_id_t serviceId, instance_id_t instanceId,
+                eventgroup_id_t eventGroupId, event_id_t eventId,
+                std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
+                uint32_t _tag, major_version_t major);
 
 private:
     void receive(const std::shared_ptr<vsomeip::message> &_message);
@@ -235,11 +234,20 @@ private:
     void dispatch();
     void cleanup();
 
-    void addSelectiveErrorListener(service_id_t serviceId,
+    void addSubscriptionStatusListener(service_id_t serviceId,
             instance_id_t instanceId,
-            eventgroup_id_t eventGroupId);
+            eventgroup_id_t eventGroupId,
+            event_id_t _eventId);
+
+    void queueSubscriptionStatusHandler(service_id_t serviceId,
+            instance_id_t instanceId);
 
     void doDisconnect();
+
+    void insertSubscriptionStatusListener(service_id_t serviceId, instance_id_t instanceId,
+            eventgroup_id_t eventGroupId, event_id_t eventId,
+            std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
+            uint32_t _tag);
 
     std::shared_ptr<std::thread> dispatchThread_;
 
@@ -284,13 +292,6 @@ private:
                                 std::weak_ptr<ProxyConnection::EventHandler>>>>> events_map_t;
     mutable events_map_t eventHandlers_;
 
-    typedef std::map<service_id_t,
-            std::map<instance_id_t,
-                    std::map<event_id_t, uint32_t>>> subscription_counter_map_t;
-
-    mutable subscription_counter_map_t subscriptionCounters_;
-
-
     mutable std::mutex availabilityMutex_;
     typedef std::map<service_id_t,
             std::map<instance_id_t,
@@ -307,16 +308,8 @@ private:
     uint32_t activeConnections_;
     std::mutex activeConnectionsMutex_;
 
-    std::map<service_id_t,
-        std::map<instance_id_t,
-            std::map<eventgroup_id_t,
-                std::queue<std::pair<std::weak_ptr<ProxyConnection::EventHandler>, std::set<uint32_t>>>>>> selectiveErrorHandlers_;
-
-    std::map<service_id_t,
-        std::map<instance_id_t,
-            std::map<eventgroup_id_t,
-                std::map<ProxyConnection::EventHandler* ,
-                    std::pair<std::weak_ptr<ProxyConnection::EventHandler>, std::set<uint32_t>>>>>> pendingSelectiveErrorHandlers_;
+    std::map<std::tuple<service_id_t, instance_id_t, eventgroup_id_t, event_id_t>,
+        std::shared_ptr<SubscriptionStatusWrapper>> subscriptionStates_;
 
     std::mutex availabilityCalledMutex_;
     std::map<service_id_t, std::map<instance_id_t, bool>> availabilityCalled_;

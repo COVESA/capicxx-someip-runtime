@@ -107,6 +107,11 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                 return;
             }
 
+            if(!reply.isValidCRC()) {
+                _callStatus = CallStatus::INVALID_VALUE;
+                return;
+            }
+
             if (sizeof...(OutArgs_) > 0) {
                 InputStream inputStream(reply, _isLittleEndian);
                 const bool success = SerializableArguments<OutArgs_...>::deserialize(inputStream, _outArgs...);

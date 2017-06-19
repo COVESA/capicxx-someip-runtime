@@ -23,8 +23,8 @@ class COMMONAPI_EXPORT Address {
 public:
     Address();
     Address(const service_id_t _service, const instance_id_t _instance,
-            major_version_t _major_version = DEFAULT_MAJOR_VERSION,
-            minor_version_t _minor_version = DEFAULT_MINOR_VERSION);
+            major_version_t _major_version = ANY_MAJOR_VERSION,
+            minor_version_t _minor_version = ANY_MINOR_VERSION);
     Address(const Address &_source);
 
     Address &operator=(const Address &_source);

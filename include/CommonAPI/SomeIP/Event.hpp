@@ -28,57 +28,30 @@ public:
     Event(ProxyBase &_proxy,
           const eventgroup_id_t _eventgroupId,
           const event_id_t _eventId,
-          bool _isField,
-          bool _isLittleEndian,
-          std::tuple<Arguments_...> _arguments)
-        : proxy_(_proxy),
-          handler_(std::make_shared<Handler>(_proxy, this)),
-          serviceId_(_proxy.getSomeIpAddress().getService()),
-          instanceId_(_proxy.getSomeIpAddress().getInstance()),
-          eventId_(_eventId),
-          eventgroupId_(_eventgroupId),
-          isField_(_isField),
-          isLittleEndian_(_isLittleEndian),
-          getMethodId_(0),
-          getReliable_(false),
-          arguments_(_arguments) {
-
-        proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_, isField_);
-    }
-
-    Event(ProxyBase &_proxy,
-          const eventgroup_id_t _eventgroupId,
-          const event_id_t _eventId,
-          bool _isField,
+          const bool _isField,
           const bool _isLittleEndian,
-          const method_id_t _methodId,
-          const bool _getReliable,
           std::tuple<Arguments_...> _arguments)
         : proxy_(_proxy),
-          handler_(std::make_shared<Handler>(_proxy, this)),
-          serviceId_(_proxy.getSomeIpAddress().getService()),
-          instanceId_(_proxy.getSomeIpAddress().getInstance()),
+          handler_(),
+          serviceId_(_proxy.getSomeIpAlias().getService()),
+          instanceId_(_proxy.getSomeIpAlias().getInstance()),
           eventId_(_eventId),
           eventgroupId_(_eventgroupId),
           isField_(_isField),
           isLittleEndian_(_isLittleEndian),
-          getMethodId_(_methodId),
-          getReliable_(_getReliable),
           arguments_(_arguments) {
-
         proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_, isField_);
     }
 
     virtual ~Event() {
-        auto major = proxy_.getSomeIpAddress().getMajorVersion();
-        auto minor = proxy_.getSomeIpAddress().getMinorVersion();
+        auto major = proxy_.getSomeIpAlias().getMajorVersion();
+        auto minor = proxy_.getSomeIpAlias().getMinorVersion();
         proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
         proxy_.unregisterEvent(serviceId_, instanceId_, eventId_);
     }
 
     virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
-        (void) _errorCode;
-        (void) _tag;
+        this->notifySpecificError(_tag, static_cast<CommonAPI::CallStatus>(_errorCode));
     }
 
 protected:
@@ -88,35 +61,36 @@ protected:
     public:
         Handler(ProxyBase&_proxy,
                 Event<Events_, Arguments_ ...>* _event) :
-            proxy_(_proxy),
+            proxy_(_proxy.getWeakPtr()),
             event_(_event) {
 
         }
 
         virtual void onEventMessage(const Message &_message) {
             notificationMutex_.lock();
-            event_->handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
-            notificationMutex_.unlock();
-        }
-
-        virtual void onInitialValueEventMessage(const Message&_message, const uint32_t tag) {
-            notificationMutex_.lock();
-            event_->handleEventMessage(tag, _message, typename make_sequence<sizeof...(Arguments_)>::type());
+            if (auto ptr = proxy_.lock()) {
+                event_->handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
+            }
             notificationMutex_.unlock();
         }
 
         virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {
-            event_->onError(_errorCode, _tag);
+            if (auto ptr = proxy_.lock()) {
+                event_->onError(_errorCode, _tag);
+            }
         }
 
     private :
-        ProxyBase& proxy_;
+        std::weak_ptr<ProxyBase> proxy_;
         Event<Events_, Arguments_ ...>* event_;
         std::mutex notificationMutex_;
     };
 
     virtual void onFirstListenerAdded(const Listener&) {
-        auto major = proxy_.getSomeIpAddress().getMajorVersion();
+        if (!handler_) {
+            handler_ = std::make_shared<Handler>(proxy_, this);
+        }
+        auto major = proxy_.getSomeIpAlias().getMajorVersion();
         proxy_.addEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, isField_, handler_, major);
     }
 
@@ -127,15 +101,14 @@ protected:
             listeners_.insert(_subscription);
         }
 
-        if (isField_) {
-            auto major = proxy_.getSomeIpAddress().getMajorVersion();
-            proxy_.getInitialEvent(serviceId_, instanceId_, eventgroupId_, eventId_, major);
-        }
+        auto major = proxy_.getSomeIpAlias().getMajorVersion();
+        proxy_.subscribe(serviceId_, instanceId_, eventgroupId_, eventId_,
+                handler_, _subscription, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {
-        auto major = proxy_.getSomeIpAddress().getMajorVersion();
-        auto minor = proxy_.getSomeIpAddress().getMinorVersion();
+        auto major = proxy_.getSomeIpAlias().getMajorVersion();
+        auto minor = proxy_.getSomeIpAlias().getMinorVersion();
         proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
     }
 
@@ -157,29 +130,24 @@ protected:
                     subscribers = listeners_;
                     listeners_.clear();
                 }
-
                 for(auto const &subscription : subscribers) {
-                    this->notifySpecificListener(subscription, std::get<Indices_>(arguments_)...);
+                    if(!_message.isValidCRC()) {
+                        this->notifySpecificError(subscription, CommonAPI::CallStatus::INVALID_VALUE);
+                    } else {
+                        this->notifySpecificListener(subscription, std::get<Indices_>(arguments_)...);
+                    }
                 }
             } else {
-                {
-                    std::lock_guard<std::mutex> itsLock(listeners_mutex_);
-                    listeners_.clear();
+                if(!_message.isValidCRC()) {
+                    this->notifyErrorListeners(CommonAPI::CallStatus::INVALID_VALUE);
+                } else {
+                    {
+                        std::lock_guard<std::mutex> itsLock(listeners_mutex_);
+                        listeners_.clear();
+                    }
+                    this->notifyListeners(std::get<Indices_>(arguments_)...);
                 }
-                this->notifyListeners(std::get<Indices_>(arguments_)...);
             }
-        } else {
-            COMMONAPI_ERROR("CommonAPI::SomeIP::Event: deserialization failed!");
-        }
-    }
-
-    template<int ... Indices_>
-    inline void handleEventMessage(uint32_t _tag, const Message &_message,
-                                   index_sequence<Indices_...>) {
-        InputStream InputStream(_message, isLittleEndian_);
-        if (SerializableArguments<Arguments_...>::deserialize(
-                InputStream, std::get<Indices_>(arguments_)...)) {
-            this->notifySpecificListener(_tag, std::get<Indices_>(arguments_)...);
         } else {
             COMMONAPI_ERROR("CommonAPI::SomeIP::Event: deserialization failed!");
         }
@@ -194,8 +162,6 @@ protected:
     const eventgroup_id_t eventgroupId_;
     const bool isField_;
     const bool isLittleEndian_;
-    const method_id_t getMethodId_;
-    const bool getReliable_;
     std::tuple<Arguments_...> arguments_;
     std::mutex listeners_mutex_;
     std::set<Subscription> listeners_;

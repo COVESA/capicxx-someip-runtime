@@ -192,8 +192,6 @@ public:
                         _eventId,
                         true,
                         _isLittleEndian,
-                        _getMethodId,
-                        _getReliable,
                         std::make_tuple(CommonAPI::Deployable<ValueType, ValueTypeDepl>(this->depl_))) {
     }
 

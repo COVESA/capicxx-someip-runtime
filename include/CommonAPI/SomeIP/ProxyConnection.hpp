@@ -46,7 +46,6 @@ class ProxyConnection {
      public:
         virtual ~EventHandler() { }
         virtual void onEventMessage(const Message&) = 0;
-        virtual void onInitialValueEventMessage(const Message &, const uint32_t) {};
         virtual void onError(const uint16_t, const uint32_t) {};
     };
 
@@ -97,15 +96,6 @@ class ProxyConnection {
             major_version_t major,
             minor_version_t minor) = 0;
 
-    virtual void subscribeForSelective(
-                 service_id_t serviceId,
-                 instance_id_t instanceId,
-                 eventgroup_id_t eventGroupId,
-                 event_id_t eventId,
-                 std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-                 uint32_t _tag,
-                 major_version_t major) = 0;
-
     virtual bool isAvailable(const Address &_address) = 0;
 
     virtual AvailabilityHandlerId_t registerAvailabilityHandler(
@@ -144,12 +134,6 @@ class ProxyConnection {
     virtual void queueSelectiveErrorHandler(service_id_t serviceId,
                                           instance_id_t instanceId) = 0;
 
-    virtual void subscribeForField(service_id_t serviceId,
-                                 instance_id_t instanceId,
-                                 eventgroup_id_t eventGroupId,
-                                 event_id_t eventId,
-                                 major_version_t major) = 0;
-
     virtual void proxyPushMessageToMainLoop(const Message &_message,
                                   std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler) = 0;
 
@@ -162,6 +146,14 @@ class ProxyConnection {
 
     virtual void getAvailableInstances(service_id_t _serviceId, std::vector<std::string> *_instances) = 0;
 
+    virtual void subscribe(
+                    service_id_t serviceId,
+                    instance_id_t instanceId,
+                    eventgroup_id_t eventGroupId,
+                    event_id_t eventId,
+                    std::weak_ptr<ProxyConnection::EventHandler> _eventHandler,
+                    uint32_t _tag,
+                    major_version_t major) = 0;
 };
 
 

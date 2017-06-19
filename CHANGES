@@ -1,5 +1,10 @@
 Changes
 =======
+v3.1.12
+- set CommonAPI CallStatus if wrong CRC value was received
+- consider version in address translation for SOME/IP
+- added backwards compatibility for splitted / merged service inferfaces
+
 v3.1.11.4
 - Fixed potential busy loop for mainloop applications
 

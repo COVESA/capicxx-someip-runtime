@@ -480,10 +480,10 @@ public:
         } value;
         std::memset(value.raw_, 0, sizeof(Type_));
 
-        if (remaining_ < size_t(_bits >> 3)) {
+        if (_bits == 0 || remaining_ < size_t(((_bits - 1) >> 3) + 1)) {
             isError = true;
         } else {
-            if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
+            if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3) && current_ != NULL) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
                 if (isLittleEndian) {
                     std::memcpy(value.raw_, current_, sizeof(Type_));

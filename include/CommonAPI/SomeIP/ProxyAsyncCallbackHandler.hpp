@@ -65,10 +65,14 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
         CallStatus callStatus = _callStatus;
         if (callStatus == CallStatus::SUCCESS) {
             if (!message.isErrorType()) {
-                InputStream inputStream(message, isLittleEndian_);
-                const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple_)...);
-                if (!success) {
-                    callStatus = CallStatus::REMOTE_ERROR;
+                if(!message.isValidCRC()) {
+                    callStatus = CallStatus::INVALID_VALUE;
+                } else {
+                    InputStream inputStream(message, isLittleEndian_);
+                    const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple_)...);
+                    if (!success) {
+                        callStatus = CallStatus::REMOTE_ERROR;
+                    }
                 }
             } else {
                 callStatus = CallStatus::REMOTE_ERROR;

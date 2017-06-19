@@ -23,6 +23,10 @@ StubManager::~StubManager() {
 
 void StubManager::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     std::shared_ptr<ProxyConnection> connection = connection_.lock();
+    if (!connection) {
+        COMMONAPI_ERROR("StubManager::registerStubAdapter couldn't lock connection");
+        return;
+    }
     Address itsAddress = _adapter->getSomeIpAddress();
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();
@@ -36,6 +40,10 @@ void StubManager::registerStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
 
 void StubManager::unregisterStubAdapter(std::shared_ptr<StubAdapter> _adapter) {
     std::shared_ptr<ProxyConnection> connection = connection_.lock();
+    if (!connection) {
+        COMMONAPI_ERROR("StubManager::unregisterStubAdapter couldn't lock connection");
+        return;
+    }
     Address itsAddress = _adapter->getSomeIpAddress();
     service_id_t service = itsAddress.getService();
     instance_id_t instance = itsAddress.getInstance();

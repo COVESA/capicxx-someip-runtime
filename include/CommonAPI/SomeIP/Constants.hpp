@@ -23,6 +23,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 const method_id_t ANY_METHOD = vsomeip::ANY_METHOD;
+const major_version_t ANY_MAJOR_VERSION  = vsomeip::ANY_MAJOR;
 const minor_version_t ANY_MINOR_VERSION  = vsomeip::ANY_MINOR;
 
 const major_version_t DEFAULT_MAJOR_VERSION = vsomeip::DEFAULT_MAJOR;
@@ -36,6 +37,12 @@ const instance_id_t MAX_INSTANCE_ID = 0xFFFE;
 
 const ms_t ASYNC_MESSAGE_REPLY_TIMEOUT_MS = 5000;
 const ms_t ASYNC_MESSAGE_CLEANUP_INTERVAL_MS = 1000;
+
+const method_id_t  MIN_METHOD_ID = 0x0001;
+const method_id_t  MAX_METHOD_ID = 0xFFFE;
+
+const eventgroup_id_t MIN_EVENTGROUP_ID = 0x0001;
+const eventgroup_id_t MAX_EVENTGROUP_ID = 0xFFFE;
 
 static const CommonAPI::CallInfo defaultCallInfo(CommonAPI::DEFAULT_SEND_TIMEOUT_MS);
 

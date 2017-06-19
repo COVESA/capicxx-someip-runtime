@@ -64,14 +64,11 @@ public:
     COMMONAPI_EXPORT virtual ProxyStatusEvent& getProxyStatusEvent();
     COMMONAPI_EXPORT virtual InterfaceVersionAttribute& getInterfaceVersionAttribute();
 
-    COMMONAPI_EXPORT virtual void getInitialEvent(
-            service_id_t serviceId, instance_id_t instanceId,
-            eventgroup_id_t eventGroupId, event_id_t eventId,
-            major_version_t major);
-
     COMMONAPI_EXPORT static void notifySpecificListener(std::weak_ptr<Proxy> _proxy,
                                                          const ProxyStatusEvent::Listener &_listener,
                                                          const ProxyStatusEvent::Subscription _subscription);
+
+    COMMONAPI_EXPORT virtual const Address &getSomeIpAlias() const;
 
 private:
     COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
@@ -86,6 +83,7 @@ private:
 
 private:
     Address address_;
+    Address alias_;
 
     ProxyStatusEventHelper proxyStatusEvent_;
 

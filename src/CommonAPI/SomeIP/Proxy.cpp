@@ -11,9 +11,12 @@
 #include <CommonAPI/SomeIP/Proxy.hpp>
 #include <CommonAPI/SomeIP/Connection.hpp>
 #include <CommonAPI/SomeIP/Factory.hpp>
+#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
+
+static std::weak_ptr<Factory> factory__(Factory::get());
 
 ProxyStatusEventHelper::ProxyStatusEventHelper(Proxy* proxy) :
         proxy_(proxy) {
@@ -212,15 +215,12 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
                                     void* _data) {
     (void)_proxy;
     (void)_data;
-    bool queueSelective(false);
+    (void) serviceId;
+    (void) instanceId;
     {
         std::lock_guard<std::recursive_mutex> listenersLock(proxyStatusEvent_.listenersMutex_);
         {
             std::lock_guard<std::mutex> itsLock(availabilityMutex_);
-            if (availabilityStatus_ == AvailabilityStatus::AVAILABLE && !isAvailable) {
-                // Only queue selective error handlers for implicitly re-subscribing!
-                queueSelective = true;
-            }
             const AvailabilityStatus itsStatus(
                     isAvailable ? AvailabilityStatus::AVAILABLE :
                             AvailabilityStatus::NOT_AVAILABLE);
@@ -235,9 +235,6 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
         availabilityTimeoutCondition_.notify_all();
         availabilityTimeoutThreadMutex_.unlock();
 
-        if (queueSelective)
-            getConnection()->queueSelectiveErrorHandler(serviceId, instanceId);
-
         for(auto listenerIt : proxyStatusEvent_.listeners_)
             proxyStatusEvent_.notifySpecificListener(listenerIt.first, availabilityStatus_);
     }
@@ -249,6 +246,7 @@ Proxy::Proxy(const Address &_address,
              bool hasSelective) :
         ProxyBase(connection),
         address_(_address),
+        alias_(AddressTranslator::get()->getAddressAlias(_address)),
         proxyStatusEvent_(this),
         availabilityStatus_(AvailabilityStatus::UNKNOWN),
         availabilityHandlerId_(0),
@@ -261,9 +259,11 @@ Proxy::~Proxy() {
         if(availabilityTimeoutThread_->joinable())
             availabilityTimeoutThread_->join();
     }
-    getConnection()->releaseService(address_);
-    getConnection()->unregisterAvailabilityHandler(address_, availabilityHandlerId_);
-    Factory::get()->decrementConnection(getConnection());
+    getConnection()->releaseService(alias_);
+    getConnection()->unregisterAvailabilityHandler(alias_, availabilityHandlerId_);
+    if (auto ptr = factory__.lock()) {
+        ptr->decrementConnection(getConnection());
+    }
 }
 
 bool Proxy::init() {
@@ -271,11 +271,11 @@ bool Proxy::init() {
     if (!connection)
         return false;
 
-    connection->requestService(address_, hasSelectiveEvents_);
+    connection->requestService(alias_, hasSelectiveEvents_);
 
     std::weak_ptr<Proxy> itsProxy = shared_from_this();
     availabilityHandlerId_ = connection->registerAvailabilityHandler(
-                                    address_,
+                                    alias_,
                                     std::bind(&Proxy::onServiceInstanceStatus,
                                               this,
                                               std::placeholders::_1,
@@ -285,7 +285,7 @@ bool Proxy::init() {
                                               std::placeholders::_5),
                                     itsProxy,
                                     NULL);
-    if (connection->isAvailable(address_)) {
+    if (connection->isAvailable(alias_)) {
         std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         availabilityStatus_ = AvailabilityStatus::AVAILABLE;
     }
@@ -296,6 +296,11 @@ bool Proxy::init() {
 const Address &
 Proxy::getSomeIpAddress() const {
     return address_;
+}
+
+const Address &
+Proxy::getSomeIpAlias() const {
+    return alias_;
 }
 
 bool Proxy::isAvailable() const {
@@ -378,13 +383,6 @@ ProxyStatusEvent& Proxy::getProxyStatusEvent() {
 
 InterfaceVersionAttribute& Proxy::getInterfaceVersionAttribute() {
     return interfaceVersionAttribute_;
-}
-
-void Proxy::getInitialEvent(service_id_t serviceId, instance_id_t instanceId,
-                            eventgroup_id_t eventGroupId, event_id_t eventId,
-                            major_version_t major) {
-    getConnection()->subscribeForField(serviceId, instanceId, eventGroupId,
-            eventId, major);
 }
 
 } // namespace SomeIP

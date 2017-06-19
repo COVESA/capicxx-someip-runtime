@@ -11,7 +11,7 @@ namespace SomeIP {
 
 Address::Address()
     : service_(0x0000), instance_(0x0000),
-      major_version_(0x00), minor_version_(0x00000000) {
+      major_version_(ANY_MAJOR_VERSION), minor_version_(ANY_MINOR_VERSION) {
 }
 
 Address::Address(const service_id_t _service, const instance_id_t _instance,
@@ -37,18 +37,32 @@ Address::operator=(const Address &_source) {
 
 bool
 Address::operator==(const Address &_other) const {
-    return (service_ == _other.service_ && instance_ == _other.instance_);
+    return (service_ == _other.service_
+            && instance_ == _other.instance_
+            && (major_version_ == ANY_MAJOR_VERSION
+                || _other.major_version_ == ANY_MAJOR_VERSION
+                || major_version_ == _other.major_version_));
 }
 
 bool
 Address::operator!=(const Address &_other) const {
-    return (service_ != _other.service_ || instance_ != _other.instance_);
+    return (service_ != _other.service_
+            || instance_ != _other.instance_
+            || (major_version_ != ANY_MAJOR_VERSION
+                && _other.major_version_ != ANY_MAJOR_VERSION
+                && major_version_ != _other.major_version_));
 }
 
 bool
 Address::operator<(const Address &_other) const {
-    return (service_ < _other.service_ ||
-            (service_ == _other.service_ && instance_ < _other.instance_));
+    return (service_ < _other.service_
+            || (service_ == _other.service_
+                && instance_ < _other.instance_)
+            || (service_ == _other.service_
+                && instance_ == _other.instance_
+                && major_version_ != ANY_MAJOR_VERSION
+                && _other.major_version_ != ANY_MAJOR_VERSION
+                && major_version_ < _other.major_version_));
 }
 
 const service_id_t &

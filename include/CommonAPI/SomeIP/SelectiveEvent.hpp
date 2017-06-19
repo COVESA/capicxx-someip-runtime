@@ -19,6 +19,7 @@ template<typename Event_, typename... Arguments_>
 class SelectiveEvent: public Event<Event_, Arguments_...> {
 public:
     typedef typename Event<Event_, Arguments_...>::Listener Listener;
+    typedef typename Event<Event_, Arguments_...>::Handler Handler;
     typedef Event<Event_, Arguments_...> EventBase;
 
     SelectiveEvent(ProxyBase &_proxy,
@@ -38,6 +39,9 @@ public:
 
 protected:
     virtual void onFirstListenerAdded(const Listener&) {
+        if (!this->handler_) {
+            this->handler_ = std::make_shared<Handler>(this->proxy_, this);
+        }
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
         this->proxy_.addEventHandler(this->serviceId_, this->instanceId_, this->eventgroupId_,
                 this->eventId_, false, this->handler_, major, true);
@@ -46,8 +50,8 @@ protected:
     virtual void onListenerAdded(const Listener &_listener, const uint32_t _subscription) {
         (void) _listener;
         auto major = this->proxy_.getSomeIpAddress().getMajorVersion();
-        this->proxy_.subscribeForSelective(this->serviceId_, this->instanceId_,
-                this->eventgroupId_, this->eventId_, this->handler_, _subscription, major);
+        this->proxy_.subscribe(this->serviceId_, this->instanceId_, this->eventgroupId_,
+                this->eventId_, this->handler_, _subscription, major);
     }
 
     virtual void onLastListenerRemoved(const Listener&) {

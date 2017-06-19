@@ -179,5 +179,11 @@ Message::setPayloadData(const byte_t* data, message_length_t length) {
     payload->set_data(data, length);
 }
 
+
+bool Message::isValidCRC() const {
+    return message_->is_valid_crc();
+}
+
+
 } // namespace SomeIP
 } // namespace CommonAPI

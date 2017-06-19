@@ -46,7 +46,7 @@ bool StringEncoder::checkBom(byte_t *&_data, uint32_t &_size, StringEncoding _en
     return result;
 }
 
-void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, EncodingStatus &_status, byte_t **_result, size_t &_length)
+void StringEncoder::utf16To8(const byte_t *_utf16Str, int _endianess, size_t _size, EncodingStatus &_status, byte_t **_result, size_t &_length)
 {
     _status = EncodingStatus::SUCCESS;
     bytes_t bytes;
@@ -137,7 +137,7 @@ void StringEncoder::utf16To8(byte_t *_utf16Str, int _endianess, size_t _size, En
     *_result = tmp;
 }
 
-void StringEncoder::utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_status, byte_t **_result, size_t &_length)
+void StringEncoder::utf8To16(const byte_t *_utf8Str, int _endianess, EncodingStatus &_status, byte_t **_result, size_t &_length)
 {
     _status = EncodingStatus::SUCCESS;
 
@@ -201,7 +201,7 @@ void StringEncoder::utf8To16(byte_t *_utf8Str, int _endianess, EncodingStatus &_
     *_result = tmp;
 }
 
-bool StringEncoder::isUtf8Valid(byte_t *_utf8Str)
+bool StringEncoder::isUtf8Valid(const byte_t *_utf8Str)
 {
     while (*_utf8Str != '\0')
     {
@@ -247,7 +247,7 @@ bool StringEncoder::isSequenceTooLong(uint32_t _codePoint, int _size)
     return false;
 }
 
-bool StringEncoder::nextUtf8(byte_t **_bytes, EncodingStatus &_status)
+bool StringEncoder::nextUtf8(const byte_t **_bytes, EncodingStatus &_status)
 {
     (*_bytes)++;
     if (**_bytes == '\0')
@@ -264,7 +264,7 @@ bool StringEncoder::nextUtf8(byte_t **_bytes, EncodingStatus &_status)
     return true;
 }
 
-bool StringEncoder::nextUtf16(byte_t **_bytes, int &_index, size_t _length, EncodingStatus &_status)
+bool StringEncoder::nextUtf16(const byte_t **_bytes, int &_index, size_t _length, EncodingStatus &_status)
 {
     (*_bytes)++;
     _index++;
@@ -286,7 +286,7 @@ uint32_t StringEncoder::getByteSequence1(byte_t _byte, EncodingStatus &_status)
     return _byte;
 }
 
-uint32_t StringEncoder::getByteSequence2(byte_t **_bytes, EncodingStatus &_status)
+uint32_t StringEncoder::getByteSequence2(const byte_t **_bytes, EncodingStatus &_status)
 {
     // 2 bytes utf8 format: 110x xxxx 10xx xxxx
 
@@ -306,7 +306,7 @@ uint32_t StringEncoder::getByteSequence2(byte_t **_bytes, EncodingStatus &_statu
     return codePoint;
 }
 
-uint32_t StringEncoder::getByteSequence3(byte_t **_bytes, EncodingStatus &_status)
+uint32_t StringEncoder::getByteSequence3(const byte_t **_bytes, EncodingStatus &_status)
 {
     // 3 bytes utf8 format: 1110 xxxx 10xx xxxx 10xx xxxx
 
@@ -333,7 +333,7 @@ uint32_t StringEncoder::getByteSequence3(byte_t **_bytes, EncodingStatus &_statu
     return codePoint;
 }
 
-uint32_t StringEncoder::getByteSequence4(byte_t **_bytes, EncodingStatus &_status)
+uint32_t StringEncoder::getByteSequence4(const byte_t **_bytes, EncodingStatus &_status)
 {
     // 4 bytes utf8 format: 1111 0xxx 10xx xxxx 10xx xxxx 10xx xxxx
 
@@ -380,7 +380,7 @@ int StringEncoder::getSequenceLength(byte_t _byte)
         return 0;
 }
 
-uint32_t StringEncoder::getNextBytes(byte_t **_bytes, EncodingStatus &_status)
+uint32_t StringEncoder::getNextBytes(const byte_t **_bytes, EncodingStatus &_status)
 {
     uint32_t codePoint = 0;
     int sequenceLength = getSequenceLength(**_bytes);

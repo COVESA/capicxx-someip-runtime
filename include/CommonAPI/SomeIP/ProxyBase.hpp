@@ -63,30 +63,6 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             major_version_t major,
             minor_version_t minor);
 
-    COMMONAPI_EXPORT virtual void getInitialEvent(
-            service_id_t serviceId,
-            instance_id_t instanceId,
-            eventgroup_id_t eventGroupId,
-            event_id_t eventId,
-            major_version_t major) = 0;
-
-    COMMONAPI_EXPORT void subscribeForSelective(
-             service_id_t serviceId,
-             instance_id_t instanceId,
-             eventgroup_id_t eventGroupId,
-             event_id_t eventId,
-             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-             uint32_t _tag,
-             major_version_t major);
-
-    COMMONAPI_EXPORT void subscribeForSelective(
-             service_id_t serviceId,
-             instance_id_t instanceId,
-             eventgroup_id_t eventGroupId,
-             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-             uint32_t _tag,
-             major_version_t major);
-
     COMMONAPI_EXPORT virtual bool init() = 0;
 
     COMMONAPI_EXPORT void registerEvent(
@@ -100,6 +76,20 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             service_id_t serviceId,
             instance_id_t instanceId,
             event_id_t eventId);
+
+    COMMONAPI_EXPORT void subscribe(
+             service_id_t serviceId,
+             instance_id_t instanceId,
+             eventgroup_id_t eventGroupId,
+             event_id_t eventId,
+             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
+             uint32_t _tag,
+             major_version_t major);
+
+    COMMONAPI_EXPORT std::weak_ptr<ProxyBase> getWeakPtr();
+
+    COMMONAPI_EXPORT virtual const Address &getSomeIpAlias() const = 0;
+
  protected:
     const std::string commonApiDomain_;
 

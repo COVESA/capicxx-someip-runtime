@@ -578,7 +578,7 @@ private:
     Message message_;
     bool errorOccurred_;
 
-    std::stack<size_t> positions_;
+    std::vector<size_t> positions_;
 
     byte_t currentByte_;
     uint8_t currentBit_;
