@@ -757,6 +757,8 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
  public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
+    typedef typename StubClass_::StubAdapterType StubAdapterType;
+    typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
     GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
         : getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
@@ -778,7 +780,12 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
 
         std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
 
-        outputStream << CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
+        auto stubAdapter = stub->StubType::getStubAdapter();
+        stubAdapter->lockAttributes();
+        auto deployable = CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
+        stubAdapter->unlockAttributes();
+
+        outputStream << deployable;
         outputStream.flush();
 
         return _connection->sendMessage(reply);
@@ -902,7 +909,10 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
 
  private:
     inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> _client, const std::shared_ptr<StubClass_> _stub) {
-        (_stub->StubType::getStubAdapter().get()->*fireChangedFunctor_)(this->getAttributeValue(_client, _stub));
+        auto stubAdapter = _stub->StubType::getStubAdapter();
+        stubAdapter->lockAttributes();
+        (stubAdapter.get()->*fireChangedFunctor_)(this->getAttributeValue(_client, _stub));
+        stubAdapter->unlockAttributes();
     }
 
     const FireChangedFunctor fireChangedFunctor_;

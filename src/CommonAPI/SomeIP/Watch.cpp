@@ -13,6 +13,7 @@
 #include <ws2tcpip.h>
 #else
 #include <unistd.h>
+#include <sys/eventfd.h>
 #endif
 
 #include <CommonAPI/SomeIP/Connection.hpp>
@@ -20,7 +21,14 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
+Watch::Watch(const std::shared_ptr<Connection>& _connection) :
+#ifdef _WIN32
+        pipeValue_(4)
+#else
+        eventFd_(0),
+        eventFdValue_(1)
+#endif
+{
 #ifdef _WIN32
     WSADATA wsaData;
     int iResult;
@@ -144,12 +152,14 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) : pipeValue_(4) {
         closesocket(ListenSocket);
         WSACleanup();
     }
+    pollFileDescriptor_.fd = pipeFileDescriptors_[0];
 #else
-    if(pipe2(pipeFileDescriptors_, O_NONBLOCK) == -1) {
+    eventFd_ = eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE);
+    if (eventFd_ == -1) {
         std::perror(__func__);
     }
+    pollFileDescriptor_.fd = eventFd_;
 #endif
-    pollFileDescriptor_.fd = pipeFileDescriptors_[0];
     pollFileDescriptor_.events = POLLIN;
 
     connection_ = _connection;
@@ -169,8 +179,7 @@ Watch::~Watch() {
     closesocket(pipeFileDescriptors_[0]);
     WSACleanup();
 #else
-    close(pipeFileDescriptors_[0]);
-    close(pipeFileDescriptors_[1]);
+    close(eventFd_);
 #endif
 }
 
@@ -228,7 +237,7 @@ void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
         }
     }
 #else
-    while (write(pipeFileDescriptors_[1], &pipeValue_, sizeof(pipeValue_)) == -1) {
+    while (write(eventFd_, &eventFdValue_, sizeof(eventFdValue_)) == -1) {
         if (errno != EAGAIN && errno != EINTR) {
             std::perror(__func__);
             break;
@@ -256,8 +265,8 @@ void Watch::popQueue() {
         printf("recv failed with error: %d\n", WSAGetLastError());
     }
 #else
-    int readValue = 0;
-    while (read(pipeFileDescriptors_[0], &readValue, sizeof(readValue)) == -1) {
+    std::uint64_t readValue(0);
+    while (read(eventFd_, &readValue, sizeof(readValue)) == -1) {
         if (errno != EAGAIN && errno != EINTR) {
             std::perror(__func__);
             break;

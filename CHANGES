@@ -1,6 +1,13 @@
 Changes
 =======
 
+v3.1.12.8
+- Fixed data race in generated StubDefault when using attributes
+- use eventfd instead of pipe in Watch
+
+v3.1.12.7
+- Don't hold mutex when pushing to watch from cleanup thread to prevent deadlock
+
 v3.1.12.6
 - Fixed hang-up in proxy destruction when async method call was done
   and proxy is not available.
