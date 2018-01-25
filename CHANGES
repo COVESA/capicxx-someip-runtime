@@ -1,6 +1,10 @@
 Changes
 =======
 
+v3.1.12.5
+- Fix possible heap corruption in conjunction with multiple mainloops
+- Optimize (de)serialization of byte arrays
+
 v3.1.12.4
 - Fixed calling of on$(BROADCASTNAME)SelectiveSubscriptionChanged
   hooks within correct thread context if mainloop integration is used

@@ -255,7 +255,46 @@ public:
         return (*this);
     }
 
-    template<typename ElementType_, typename ElementDepl_>
+    template<typename ElementType_, typename ElementDepl_,
+        typename std::enable_if<(std::is_same<int8_t, ElementType_>::value ||
+                                 std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT InputStream &readValue(std::vector<ElementType_> &_value,
+            const ArrayDeployment<ElementDepl_> *_depl) {
+        bitAlign();
+
+        uint32_t itsSize;
+
+        uint8_t arrayLengthWidth = (_depl ? _depl->arrayLengthWidth_ : 4);
+        uint32_t arrayMinLength = (_depl ? _depl->arrayMinLength_ : 0);
+        uint32_t arrayMaxLength = (_depl ? _depl->arrayMaxLength_ : 0xFFFFFFFF);
+
+        // Read array size
+        if (arrayLengthWidth > 0) {
+            readValue(itsSize, arrayLengthWidth, true);
+            if (itsSize < arrayMinLength ||
+                    (arrayMaxLength != 0 && itsSize > arrayMaxLength) ||
+                    itsSize > remaining_) {
+                errorOccurred_ = true;
+            }
+        } else {
+            itsSize = arrayMaxLength;
+        }
+
+        // Reset target
+        _value.clear();
+
+        // Read elements, if reading size has been successful
+        if (!hasError()) {
+            ElementType_ *base = reinterpret_cast<ElementType_ *>(_readRaw(itsSize));
+            _value.assign(base, base+itsSize);
+        }
+
+        return (*this);
+    }
+
+    template<typename ElementType_, typename ElementDepl_,
+        typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
+                                 !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
     COMMONAPI_EXPORT InputStream &readValue(std::vector<ElementType_> &_value,
                            const ArrayDeployment<ElementDepl_> *_depl) {
         bitAlign();

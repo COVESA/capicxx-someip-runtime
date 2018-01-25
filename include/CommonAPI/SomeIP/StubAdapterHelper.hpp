@@ -374,7 +374,6 @@ public:
                          const std::shared_ptr<StubClass_> &_stub,
                          RemoteEventHandlerType* _remoteEventHandler,
                          std::shared_ptr<ProxyConnection> _connection) {
-        connection_ = _connection;
         return dispatchMessageHelper(
                     _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
@@ -382,6 +381,7 @@ public:
     }
 
     bool sendReplyMessage(const CommonAPI::CallId_t _call,
+                          const std::weak_ptr<ProxyConnection> &_connection,
                           const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> _args = std::make_tuple()) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -393,7 +393,7 @@ public:
                 return false;
             }
         }
-        return sendReplyMessageHelper(_call, typename make_sequence_range<sizeof...(OutArgs_), 0>::type(), _args);
+        return sendReplyMessageHelper(_call, _connection, typename make_sequence_range<sizeof...(OutArgs_), 0>::type(), _args);
     }
 
 protected:
@@ -406,8 +406,6 @@ protected:
     CommonAPI::CallId_t currentCall_;
     std::map<CommonAPI::CallId_t, Message> pending_;
     std::mutex mutex_; // protects pending_
-
-    std::weak_ptr<ProxyConnection> connection_;
 
 private:
     template <int... DeplInArgIndices_>
@@ -423,13 +421,10 @@ private:
                                       index_sequence<InArgIndices_...>,
                                       index_sequence<OutArgIndices_...>) {
         (void) _remoteEventHandler;
-        (void) _connection;
 
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
-            if(auto itsConnection = connection_.lock()) {
-                itsConnection->sendMessage(error);
-            }
+            _connection->sendMessage(error);
             return true;
         }
 
@@ -455,12 +450,14 @@ private:
         // and a lambda function which holds the call identifier the deployments
         // for the out-Parameters and extracts them from the deployables before
         // calling the send function.
+        std::weak_ptr<ProxyConnection> itsConnection = _connection;
         (_stub.get()->*stubFunctor_)(
             client,
             std::move(std::get<InArgIndices_>(in).getValue())...,
-            [call, this](OutArgs_... _args) {
+            [call, itsConnection, this](OutArgs_... _args) {
                 this->sendReplyMessage(
                     call,
+                    itsConnection,
                     std::make_tuple(
                         CommonAPI::Deployable<OutArgs_, DeplOutArgs_>(
                             _args, std::get<OutArgIndices_>(out_)
@@ -475,6 +472,7 @@ private:
 
     template<int... OutArgIndices_>
     bool sendReplyMessageHelper(const CommonAPI::CallId_t _call,
+                                const std::weak_ptr<ProxyConnection> &_connection,
                                 index_sequence<OutArgIndices_...>,
                                 const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>& _args) {
         (void)_args;
@@ -495,7 +493,7 @@ private:
             return false;
         }
         bool isSuccessful = false;
-        if(auto itsConnection = connection_.lock()) {
+        if(auto itsConnection = _connection.lock()) {
             isSuccessful = itsConnection->sendMessage(reply->second);
         }
         pending_.erase(_call);
@@ -552,7 +550,6 @@ public:
                          const std::shared_ptr<StubClass_> &_stub,
                          RemoteEventHandlerType* _remoteEventHandler,
                          std::shared_ptr<ProxyConnection> _connection) {
-        this->connection_ = _connection;
         return dispatchMessageHelper(
                     _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
@@ -590,13 +587,10 @@ private:
                                       index_sequence<OutArgIndices_...>,
                                       index_sequence<ErrorRepliesIndices_...>) {
         (void) _remoteEventHandler;
-        (void) _connection;
 
         if (!_message.isRequestType()) {
             auto error = _message.createErrorResponseMessage(return_code_e::E_WRONG_MESSAGE_TYPE);
-            if(auto itsConnection = this->connection_.lock()) {
-                itsConnection->sendMessage(error);
-            }
+            _connection->sendMessage(error);
             return true;
         }
 
@@ -622,13 +616,15 @@ private:
         // and a lambda function which holds the call identifier the deployments
         // for the out-Parameters and extracts them from the deployables before
         // calling the send function.
+        std::weak_ptr<ProxyConnection> itsConnection = _connection;
         (_stub.get()->*stubFunctor_)(
             client,
             call,
             std::move(std::get<InArgIndices_>(in).getValue())...,
-            [call, this](OutArgs_... _args) {
+            [call, itsConnection, this](OutArgs_... _args) {
                 this->sendReplyMessage(
                     call,
+                    itsConnection,
                     std::make_tuple(
                         CommonAPI::Deployable<OutArgs_, DeplOutArgs_>(
                             _args, std::get<OutArgIndices_>(this->out_)
@@ -644,6 +640,7 @@ private:
 
     template<int... OutArgIndices_>
     bool sendErrorReplyMessageHelper(const CommonAPI::CallId_t _call,
+                                     const std::weak_ptr<ProxyConnection> &_connection,
                                      index_sequence<OutArgIndices_...>,
                                      const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>& _args) {
         (void)_args;
@@ -664,7 +661,7 @@ private:
             return false;
         }
         bool isSuccessful = false;
-        if(auto itsConnection = this->connection_.lock()) {
+        if(auto itsConnection = _connection.lock()) {
             isSuccessful = itsConnection->sendMessage(reply->second);
         }
         this->pending_.erase(_call);

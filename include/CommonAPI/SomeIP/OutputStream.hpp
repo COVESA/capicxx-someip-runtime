@@ -252,7 +252,41 @@ public:
         return (*this);
     }
 
-    template<typename ElementType_, typename ElementDepl_>
+    template<typename ElementType_, typename ElementDepl_,
+        typename std::enable_if<(std::is_same<int8_t, ElementType_>::value ||
+                                 std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<ElementType_> &_value,
+                             const ArrayDeployment<ElementDepl_> *_depl) {
+        bitAlign();
+
+        uint8_t arrayLengthWidth = (_depl ? _depl->arrayLengthWidth_ : 4);
+        uint32_t arrayMinLength = (_depl ? _depl->arrayMinLength_ : 0);
+        uint32_t arrayMaxLength = (_depl ? _depl->arrayMaxLength_ : 0xFFFFFFFF);
+
+        if (arrayLengthWidth != 0) {
+            if (arrayMinLength != 0 && _value.size() < arrayMinLength) {
+                errorOccurred_ = true;
+            }
+            if (arrayMaxLength != 0 && _value.size() > arrayMaxLength) {
+                errorOccurred_ = true;
+            }
+        } else {
+            if (arrayMaxLength != _value.size()) {
+                errorOccurred_ = true;
+            }
+        }
+
+        if (!hasError()) {
+            _writeValue(uint32_t(_value.size()), arrayLengthWidth);
+            _writeRaw(reinterpret_cast<const byte_t *>(&_value[0]), _value.size());
+        }
+
+        return (*this);
+    }
+
+    template<typename ElementType_, typename ElementDepl_,
+        typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
+                                 !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
     COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<ElementType_> &_value,
                              const ArrayDeployment<ElementDepl_> *_depl) {
         bitAlign();

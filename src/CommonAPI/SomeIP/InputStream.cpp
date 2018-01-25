@@ -333,28 +333,16 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
     // Reset target
     _value.clear();
 
+    if (itsSize < byteBufferMinLength
+            || (0 != byteBufferMaxLength && itsSize > byteBufferMaxLength)
+            || itsSize > remaining_) {
+        errorOccurred_ = true;
+    }
+
     // Read elements, if reading size has been successful
     if (!hasError()) {
-        while (itsSize > 0) {
-            size_t remainingBeforeRead = remaining_;
-
-            uint8_t itsElement;
-            readValue(itsElement, static_cast<const IntegerDeployment<uint8_t> *>(nullptr));
-            if (hasError()) {
-                break;
-            }
-
-            _value.push_back(std::move(itsElement));
-
-            itsSize -= uint32_t(remainingBeforeRead - remaining_);
-        }
-
-        if (byteBufferMinLength != 0 && _value.size() < byteBufferMinLength) {
-            errorOccurred_ = true;
-        }
-        if (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength) {
-            errorOccurred_ = true;
-        }
+        byte_t *base = _readRaw(itsSize);
+        _value.assign(base, base+itsSize);
     }
 
     return (*this);

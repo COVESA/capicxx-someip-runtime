@@ -268,32 +268,15 @@ OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBuffe
     uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
 
-    pushPosition();     // Start of length field
-    _writeValue(0, 4);  // Length field placeholder
-    pushPosition();     // Start of vector data
-
-    if (byteBufferMinLength != 0 && _value.size() < byteBufferMinLength) {
-        errorOccurred_ = true;
-    }
-    if (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength) {
+    if (_value.size() < byteBufferMinLength
+        || (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength)) {
         errorOccurred_ = true;
     }
 
-    if (hasError()) {
-        return (*this);
+    if (!hasError()) {
+        _writeValue(uint32_t(_value.size()), 4);
+        _writeRaw(static_cast<const byte_t *>(&_value[0]), _value.size());
     }
-    // Write array/vector content
-    for (auto i : _value) {
-        writeValue(i, static_cast<EmptyDeployment *>(nullptr));
-        if (hasError()) {
-            return (*this);
-        }
-    }
-
-    // Write actual value of length field
-    size_t length = getPosition() - popPosition();
-    size_t position2Write = popPosition();
-    _writeValueAt(uint32_t(length), 4, uint32_t(position2Write));
 
     return (*this);
 }
