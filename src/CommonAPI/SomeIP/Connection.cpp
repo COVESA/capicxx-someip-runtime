@@ -525,14 +525,13 @@ void Connection::addEventHandler(
 
     (void)major;
     (void)isField;
-    (void)isSelective;
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     if(auto itsHandler = eventHandler.lock()) {
         eventHandlers_[serviceId][instanceId][eventId][itsHandler.get()] = eventHandler;
         const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
         if(inserted) {
             addSubscriptionStatusListener(serviceId, instanceId, eventGroupId,
-                    eventId);
+                    eventId, isSelective);
         }
     }
 }
@@ -608,7 +607,7 @@ void Connection::subscribe(service_id_t serviceId, instance_id_t instanceId,
 void Connection::addSubscriptionStatusListener(service_id_t serviceId,
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
-        event_id_t eventId) {
+        event_id_t eventId, bool isSelective) {
 
     auto statusHandler = [this] (
                 const vsomeip::service_t _service, const vsomeip::instance_t _instance,
@@ -641,7 +640,7 @@ void Connection::addSubscriptionStatusListener(service_id_t serviceId,
         }
     };
     application_->register_subscription_status_handler(serviceId, instanceId,
-                eventGroupId, eventId, statusHandler);
+                eventGroupId, eventId, statusHandler, isSelective);
 
 }
 

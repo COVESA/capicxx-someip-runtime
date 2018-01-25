@@ -237,7 +237,7 @@ private:
     void addSubscriptionStatusListener(service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
-            event_id_t _eventId);
+            event_id_t _eventId, bool isSelective);
 
     void queueSubscriptionStatusHandler(service_id_t serviceId,
             instance_id_t instanceId);

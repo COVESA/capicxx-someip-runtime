@@ -1,5 +1,9 @@
 Changes
 =======
+
+v3.1.12.1
+- Adapt to vSomeIP 2.8.0: Don't call subscription status handler on SubscribeEventGroupNACK for non selective subscriptions
+
 v3.1.12
 - set CommonAPI CallStatus if wrong CRC value was received
 - consider version in address translation for SOME/IP
