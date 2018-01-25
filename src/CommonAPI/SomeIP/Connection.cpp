@@ -180,7 +180,8 @@ void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _inst
         availabilityCalled_[_service][_instance] = true;
     }
     if (auto lockedContext = mainLoopContext_.lock()) {
-        std::shared_ptr<AvblQueueEntry> avbl_queue_entry = std::make_shared<AvblQueueEntry>(_service, _instance, _is_available);
+        std::shared_ptr<AvblQueueEntry> avbl_queue_entry = std::make_shared<AvblQueueEntry>(
+                _service, _instance, _is_available);
         watch_->pushQueue(avbl_queue_entry);
     }
     else {
@@ -188,45 +189,57 @@ void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _inst
     }
 }
 
-void Connection::handleAvailabilityChange(const service_id_t _service,
-        instance_id_t _instance, bool _is_available) {
-    if (!_is_available) {
-        // cancel synchronous calls
-        sendAndBlockCondition_.notify_all();
-
-        // cancel asynchronous calls
+void Connection::cancelAsyncAnswers(const service_id_t _service, const instance_id_t _instance) {
+    async_answers_map_t asyncAnswersToProcess;
+    {
         std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
         auto it = asyncAnswers_.begin();
         while (it != asyncAnswers_.end()) {
-            std::shared_ptr<vsomeip::message> itsRequest(
-                    std::get<1>(it->second));
-            if(_service == itsRequest->get_service()
-                    && _instance == itsRequest->get_instance()) {
-                std::shared_ptr<vsomeip::message> itsResponse
-                    = vsomeip::runtime::get()->create_response(itsRequest);
-                itsResponse->set_message_type(
-                        vsomeip::message_type_e::MT_ERROR);
-                itsResponse->set_return_code(
-                        vsomeip::return_code_e::E_TIMEOUT);
-                if (auto lockedContext = mainLoopContext_.lock()) {
-                    std::shared_ptr<MsgQueueEntry> msg_queue_entry
-                        = std::make_shared<MsgQueueEntry>(itsResponse,
-                                commDirectionType::PROXYRECEIVE);
-                    watch_->pushQueue(msg_queue_entry);
-                    asyncTimeouts_[it->first] = std::move(it->second);
-                } else {
-                    try {
-                        std::get<2>(it->second)->onMessageReply(
-                                CallStatus::REMOTE_ERROR, Message(itsResponse));
-                    } catch (const std::exception& e) {
-                        COMMONAPI_ERROR("Message reply failed when service became unavailable(", e.what(), ")");
-                    }
-                }
+            if(_service == std::get<1>(it->second)->get_service()
+                    && _instance == std::get<1>(it->second)->get_instance()) {
+                asyncAnswersToProcess[it->first] = std::move(it->second);
                 it = asyncAnswers_.erase(it);
             } else {
                 it++;
             }
         }
+    }
+    for (auto& its_answer : asyncAnswersToProcess) {
+        std::shared_ptr<vsomeip::message> itsRequest(
+                std::get<1>(its_answer.second));
+        std::shared_ptr<vsomeip::message> itsResponse
+            = vsomeip::runtime::get()->create_response(std::get<1>(its_answer.second));
+        itsResponse->set_message_type(
+                vsomeip::message_type_e::MT_ERROR);
+        itsResponse->set_return_code(
+                vsomeip::return_code_e::E_TIMEOUT);
+        if (auto lockedContext = mainLoopContext_.lock()) {
+            {
+                std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+                asyncTimeouts_[its_answer.first] = std::move(its_answer.second);
+            }
+            std::shared_ptr<MsgQueueEntry> msg_queue_entry
+                = std::make_shared<MsgQueueEntry>(itsResponse,
+                        commDirectionType::PROXYRECEIVE);
+            watch_->pushQueue(msg_queue_entry);
+        } else {
+            try {
+                std::get<2>(its_answer.second)->onMessageReply(
+                        CallStatus::REMOTE_ERROR, Message(itsResponse));
+            } catch (const std::exception& e) {
+                COMMONAPI_ERROR("Message reply failed when service became unavailable(", e.what(), ")");
+            }
+        }
+    }
+}
+
+void Connection::handleAvailabilityChange(const service_id_t _service,
+        instance_id_t _instance, bool _is_available) {
+    if (!_is_available) {
+        // cancel sync calls
+        sendAndBlockCondition_.notify_all();
+        // cancel asynchronous calls
+        cancelAsyncAnswers(_service, _instance);
     }
 
     std::list<std::tuple<AvailabilityHandler_t,
@@ -269,41 +282,57 @@ void Connection::cleanup() {
     while (!cleanupCancelled_) {
         if (std::cv_status::timeout ==
             cleanupCondition_.wait_for(itsLock, std::chrono::milliseconds(timeout))) {
-            std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
-            std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
-
-            auto it = asyncAnswers_.begin();
-            while (it != asyncAnswers_.end()) {
-                if(now > std::get<0>(it->second)) {
-                    std::shared_ptr<vsomeip::message> response
-                        = vsomeip::runtime::get()->create_response(std::get<1>(it->second));
-                    response->set_message_type(vsomeip::message_type_e::MT_ERROR);
-                    response->set_return_code(vsomeip::return_code_e::E_TIMEOUT);
-                    if (auto lockedContext = mainLoopContext_.lock()) {
-                        std::shared_ptr<MsgQueueEntry> msg_queue_entry = std::make_shared<MsgQueueEntry>(
-                                        response, commDirectionType::PROXYRECEIVE);
-                        watch_->pushQueue(msg_queue_entry);
-                        asyncTimeouts_[it->first] = std::move(it->second);
+            std::chrono::steady_clock::time_point now =
+                    (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
+            async_answers_map_t asyncAnswersToProcess;
+            {
+                std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+                auto it = asyncAnswers_.begin();
+                while (it != asyncAnswers_.end()) {
+                    if(now > std::get<0>(it->second)) {
+                        asyncAnswersToProcess[it->first] = std::move(it->second);
+                        it = asyncAnswers_.erase(it);
                     } else {
-                        try {
-                            std::get<2>(it->second)->onMessageReply(CallStatus::REMOTE_ERROR, Message(response));
-                        } catch (const std::exception& e) {
-                            COMMONAPI_ERROR("Message reply failed on cleanup(", e.what(), ")");
-                        }
+                        it++;
                     }
-                    it = asyncAnswers_.erase(it);
+                }
+            }
+
+            for (auto& its_answer : asyncAnswersToProcess) {
+                std::shared_ptr<vsomeip::message> response
+                    = vsomeip::runtime::get()->create_response(std::get<1>(its_answer.second));
+                response->set_message_type(vsomeip::message_type_e::MT_ERROR);
+                response->set_return_code(vsomeip::return_code_e::E_TIMEOUT);
+                if (auto lockedContext = mainLoopContext_.lock()) {
+                    {
+                        std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+                        asyncTimeouts_[its_answer.first] = std::move(its_answer.second);
+                    }
+                    std::shared_ptr<MsgQueueEntry> msg_queue_entry =
+                            std::make_shared<MsgQueueEntry>(
+                                    response, commDirectionType::PROXYRECEIVE);
+                    watch_->pushQueue(msg_queue_entry);
                 } else {
-                    it++;
+                    try {
+                        std::get<2>(its_answer.second)->onMessageReply(
+                                CallStatus::REMOTE_ERROR, Message(response));
+                    } catch (const std::exception& e) {
+                        COMMONAPI_ERROR("Message reply failed on cleanup(", e.what(), ")");
+                    }
                 }
             }
         }
 
         {
+            // Update the upcoming timeout
             timeout = std::numeric_limits<int>::max();
-            std::chrono::steady_clock::time_point now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
+            std::chrono::steady_clock::time_point now =
+                    (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
             std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
             for (auto it = asyncAnswers_.begin(); it != asyncAnswers_.end(); it++) {
-                int remaining = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::get<0>(it->second) - now).count();
+                int remaining =
+                        (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::get<0>(it->second) - now).count();
                 if (timeout > remaining)
                     timeout = remaining;
             }
@@ -632,26 +661,32 @@ void Connection::addSubscriptionStatusListener(service_id_t serviceId,
 
         // SubscriptionStatusListenerCalled!
         auto its_tuple = std::make_tuple(_service, _instance, _eventgroup, _event);
-        std::unique_lock<std::mutex> lock(eventHandlerMutex_);
         SubscriptionStatusWrapper subscriptionStatus(_service, _instance, _eventgroup, _event);
+
+        std::unique_lock<std::mutex> lock(eventHandlerMutex_);
         auto its_wrapper = subscriptionStates_.find(its_tuple);
         if (its_wrapper != subscriptionStates_.end()) {
+            // Copy all entries to process with lock is held
+            std::vector<std::pair<std::weak_ptr<ProxyConnection::EventHandler>, uint32_t >> handlerCopy;
             while (!its_wrapper->second->pendingHandlerQueueEmpty()) {
-                auto entry = its_wrapper->second->popAndFrontPendingHandler();
-                    std::weak_ptr<ProxyConnection::EventHandler> handler = entry.first;
-                    if (auto lockedContext = mainLoopContext_.lock()) {
-                        std::shared_ptr<ErrQueueEntry> err_queue_entry =
-                                std::make_shared<ErrQueueEntry>(
-                                        handler, errorCode, entry.second,
-                                        _service, _instance, _eventgroup, _event);
-                        watch_->pushQueue(err_queue_entry);
-                    } else {
-                        if(auto itsHandler = handler.lock()) {
-                            lock.unlock();
-                            itsHandler->onError(errorCode, entry.second);
-                            lock.lock();
-                        }
+                handlerCopy.push_back(its_wrapper->second->popAndFrontPendingHandler());
+            }
+            lock.unlock(); // Unlock as we locally copied all entries to process before
+
+            // Process all copied entries without the lock is held
+            for (auto its_handlerCopy : handlerCopy) {
+                std::weak_ptr<ProxyConnection::EventHandler> handler = its_handlerCopy.first;
+                if (auto lockedContext = mainLoopContext_.lock()) {
+                    std::shared_ptr<ErrQueueEntry> err_queue_entry =
+                            std::make_shared<ErrQueueEntry>(
+                                    handler, errorCode, its_handlerCopy.second,
+                                    _service, _instance, _eventgroup, _event);
+                    watch_->pushQueue(err_queue_entry);
+                } else {
+                    if(auto itsHandler = handler.lock()) {
+                        itsHandler->onError(errorCode, its_handlerCopy.second);
                     }
+                }
             }
         }
     };

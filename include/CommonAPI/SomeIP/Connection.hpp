@@ -249,6 +249,8 @@ private:
             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             uint32_t _tag);
 
+    void cancelAsyncAnswers(const service_id_t _service, const instance_id_t _instance);
+
     std::shared_ptr<std::thread> dispatchThread_;
 
     std::weak_ptr<MainLoopContext> mainLoopContext_;
