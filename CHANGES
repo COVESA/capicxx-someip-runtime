@@ -1,6 +1,10 @@
 Changes
 =======
 
+v3.1.12.11
+- Set default build type to RelWithDebInfo when not specified
+  explicitly.
+
 v3.1.12.10
 - Ensure subsequent event delivery after uncatched exceptions in
   registered event handlers by the user

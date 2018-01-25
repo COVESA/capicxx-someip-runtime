@@ -38,6 +38,15 @@ ENDIF(USE_CONSOLE)
 
 add_definitions(-DDEFAULT_SEND_TIMEOUT=${DEFAULT_SEND_TIMEOUT})
 
+# Set a default build type if none was specified
+set(default_build_type "RelWithDebInfo")
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Setting build type to '${default_build_type}' as none was specified.")
+  set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
 if (MSVC) 
 # Boost
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
@@ -57,7 +66,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS /wd4503")
 link_directories(${Boost_LIBRARY_DIR})
 else()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread")
 endif()
 
 SET(MAX_LOG_LEVEL "DEBUG" CACHE STRING "maximum log level")
@@ -73,23 +82,6 @@ macro (pkg_config_module_not_found_message PKG_CONFIG_MODULE)
     message (FATAL_ERROR "pkg-config could not find the required module ${PKG_CONFIG_MODULE}!"
       " Please adjust your PKG_CONFIG_PATH environment variable accordingly.")
 endmacro ()
-
-# BEGIN TEMPORARY WORKAROUND #
-# OS
-if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    set (OS "LINUX")
-    set (NO_DEPRECATED_REGISTER "")
-endif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-
-if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-    set (OS "FREEBSD")
-    set (NO_DEPRECATED_REGISTER "-Wno-deprecated-register")
-endif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-
-if (NOT MSVC)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D${OS} ${NO_DEPRECATED_REGISTER} -DBOOST_LOG_DYN_LINK -pthread -g -std=c++0x -O0")
-endif()
-# END TEMPORARY WORKAROUND #
 
 ###################################################################################################
 # see http://www.cmake.org/Wiki/CMake/Tutorials/How_to_create_a_ProjectConfig.cmake_file
