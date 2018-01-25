@@ -278,7 +278,9 @@ public:
 
         if (!hasError()) {
             _writeValue(uint32_t(_value.size()), arrayLengthWidth);
-            _writeRaw(reinterpret_cast<const byte_t *>(&_value[0]), _value.size());
+            if (_value.size()) {
+                _writeRaw(reinterpret_cast<const byte_t *>(&_value[0]), _value.size());
+            }
         }
 
         return (*this);

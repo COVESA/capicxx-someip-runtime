@@ -1,6 +1,12 @@
 Changes
 =======
 
+v3.1.12.6
+- Fixed hang-up in proxy destruction when async method call was done
+  and proxy is not available.
+- Ensure that all async method calls done while the proxy is not
+  available are called with CAPI::CallStatus::NOT_AVAILABLE.
+
 v3.1.12.5
 - Fix possible heap corruption in conjunction with multiple mainloops
 - Optimize (de)serialization of byte arrays

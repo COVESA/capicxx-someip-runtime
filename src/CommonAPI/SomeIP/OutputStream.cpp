@@ -275,7 +275,9 @@ OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBuffe
 
     if (!hasError()) {
         _writeValue(uint32_t(_value.size()), 4);
-        _writeRaw(static_cast<const byte_t *>(&_value[0]), _value.size());
+        if (_value.size()) {
+            _writeRaw(static_cast<const byte_t *>(&_value[0]), _value.size());
+        }
     }
 
     return (*this);

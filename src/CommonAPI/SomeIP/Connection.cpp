@@ -67,7 +67,14 @@ void Connection::receive(const std::shared_ptr<vsomeip::message> &_message) {
 void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_message) {
     sendReceiveMutex_.lock();
 
-    session_id_t sessionId = _message->get_session();
+    session_id_fake_t sessionId = _message->get_session();
+    if (!sessionId) {
+        auto found_Message = errorResponses_.find(_message);
+        if (found_Message != errorResponses_.end()) {
+            sessionId = found_Message->second;
+            errorResponses_.erase(found_Message);
+        }
+    }
 
     // handle events
     if(_message->get_message_type() == message_type_e::MT_NOTIFICATION) {
@@ -237,7 +244,10 @@ void Connection::handleAvailabilityChange(const service_id_t _service,
         instance_id_t _instance, bool _is_available) {
     if (!_is_available) {
         // cancel sync calls
-        sendAndBlockCondition_.notify_all();
+        {
+            std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+            sendAndBlockCondition_.notify_all();
+        }
         // cancel asynchronous calls
         cancelAsyncAnswers(_service, _instance);
     }
@@ -314,8 +324,10 @@ void Connection::cleanup() {
                     watch_->pushQueue(msg_queue_entry);
                 } else {
                     try {
+                        itsLock.unlock();
                         std::get<2>(its_answer.second)->onMessageReply(
                                 CallStatus::REMOTE_ERROR, Message(response));
+                        itsLock.lock();
                     } catch (const std::exception& e) {
                         COMMONAPI_ERROR("Message reply failed on cleanup(", e.what(), ")");
                     }
@@ -415,8 +427,8 @@ void Connection::doDisconnect() {
         {
             std::lock_guard<std::mutex> lg(cleanupMutex_);
             cleanupCancelled_ = true;
+            cleanupCondition_.notify_one();
         }
-        cleanupCondition_.notify_one();
         if (asyncAnswersCleanupThread_->joinable())
             asyncAnswersCleanupThread_->join();
     }
@@ -486,23 +498,30 @@ bool Connection::sendMessageWithReplyAsync(
     if (!isConnected())
         return false;
 
-    std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
-    application_->send(message.message_, true);
 
-    if (_info->sender_ != 0) {
-        COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
-                " - ClientID: ", message.getClientId(),
-                ", SessionID: ", message.getSessionId());
+    {
+        std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
+        application_->send(message.message_, true);
+
+        if (_info->sender_ != 0) {
+            COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
+                    " - ClientID: ", message.getClientId(),
+                    ", SessionID: ", message.getSessionId());
+        }
+
+        auto timeoutTime =
+                (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
+                        + std::chrono::milliseconds(_info->timeout_);
+
+        asyncAnswers_[message.getSessionId()] = std::make_tuple(
+                timeoutTime, message.message_,
+                std::move(messageReplyAsyncHandler));
+    }
+    {
+        std::lock_guard<std::mutex> itsLock(cleanupMutex_);
+        cleanupCondition_.notify_one();
     }
 
-    auto timeoutTime = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
-                       + std::chrono::milliseconds(_info->timeout_);
-
-    asyncAnswers_[message.getSessionId()] = std::make_tuple(
-            timeoutTime, message.message_,
-            std::move(messageReplyAsyncHandler));
-
-    cleanupCondition_.notify_one();
 
     return true;
 }
@@ -516,7 +535,7 @@ Message Connection::sendMessageWithReplyAndBlock(
 
     std::unique_lock<std::recursive_mutex> lock(sendReceiveMutex_);
 
-    std::pair<std::map<session_id_t, Message>::iterator, bool> itsAnswer;
+    std::pair<std::map<session_id_fake_t, Message>::iterator, bool> itsAnswer;
     application_->send(message.message_, true);
     if (_info->sender_ != 0) {
         COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
@@ -1155,7 +1174,17 @@ void Connection::proxyPushMessageToMainLoop(const Message &_message,
         std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
         auto timeoutTime = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
                            + std::chrono::milliseconds(ASYNC_MESSAGE_REPLY_TIMEOUT_MS);
-        asyncAnswers_[_message.getSessionId()]
+        session_id_fake_t itsSession = _message.getSessionId();
+        if (itsSession == 0) {
+            static std::uint16_t fakeSessionId = 0;
+            fakeSessionId++;
+            if (fakeSessionId == 0) {
+                fakeSessionId++; // set to 1 on overflow
+            }
+            itsSession = static_cast<session_id_fake_t>(fakeSessionId << 16);
+            errorResponses_[_message.message_] = itsSession;
+        }
+        asyncAnswers_[itsSession]
             = std::make_tuple(
                     timeoutTime, _message.message_,
                     std::move(messageReplyAsyncHandler));

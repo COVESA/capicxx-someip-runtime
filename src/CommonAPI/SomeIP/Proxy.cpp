@@ -51,7 +51,7 @@ void ProxyStatusEventHelper::onListenerRemoved(const Listener& _listener,
 void Proxy::availabilityTimeoutThreadHandler() const {
     std::unique_lock<std::mutex> threadLock(availabilityTimeoutThreadMutex_);
 
-    bool cancel = false;
+    bool finish = false;
     bool firstIteration = true;
 
     // the callbacks that have to be done are stored with
@@ -64,7 +64,7 @@ void Proxy::availabilityTimeoutThreadHandler() const {
             > CallbackData_t;
     std::list<CallbackData_t> callbacks;
 
-    while(!cancel) {
+    while(!finish) {
 
         //get min timeout
         timeoutsMutex_.lock();
@@ -185,7 +185,7 @@ void Proxy::availabilityTimeoutThreadHandler() const {
         //cancel thread
         timeoutsMutex_.lock();
         if(timeouts_.size() == 0 && callbacks.size() == 0)
-            cancel = true;
+            finish = true;
         timeoutsMutex_.unlock();
     }
 }
@@ -238,7 +238,10 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
         for(auto listenerIt : proxyStatusEvent_.listeners_)
             proxyStatusEvent_.notifySpecificListener(listenerIt.first, availabilityStatus_);
     }
-    _proxy->availabilityCondition_.notify_one();
+    {
+        std::lock_guard<std::mutex> itsLock(_proxy->availabilityMutex_);
+        _proxy->availabilityCondition_.notify_one();
+    }
 }
 
 Proxy::Proxy(const Address &_address,
@@ -255,9 +258,20 @@ Proxy::Proxy(const Address &_address,
 }
 
 Proxy::~Proxy() {
+    {
+        std::lock_guard<std::mutex> itsLock(timeoutsMutex_);
+        timeouts_.clear();
+    }
+    {
+        std::lock_guard<std::mutex> itsTimeoutThreadLock(availabilityTimeoutThreadMutex_);
+        availabilityTimeoutCondition_.notify_all();
+    }
     if(availabilityTimeoutThread_) {
-        if(availabilityTimeoutThread_->joinable())
+        if (availabilityTimeoutThread_->get_id() == std::this_thread::get_id()) {
+            availabilityTimeoutThread_->detach();
+        } else if(availabilityTimeoutThread_->joinable()) {
             availabilityTimeoutThread_->join();
+        }
     }
     getConnection()->releaseService(alias_);
     getConnection()->unregisterAvailabilityHandler(alias_, availabilityHandlerId_);
@@ -357,7 +371,8 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
         //start availability thread
         if(!isAvailabilityTimeoutThread)
             availabilityTimeoutThread_ = std::make_shared<std::thread>(
-                    std::bind(&Proxy::availabilityTimeoutThreadHandler, this));
+                    std::bind(&Proxy::availabilityTimeoutThreadHandler,
+                              shared_from_this()));
     } else {
         //add timeout
         timeouts_.push_back(std::make_tuple(timeoutPoint, _callback, std::move(promise)));

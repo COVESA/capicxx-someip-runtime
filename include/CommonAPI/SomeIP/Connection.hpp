@@ -269,16 +269,16 @@ private:
 
     std::shared_ptr<vsomeip::application> application_;
 
-    mutable std::map<session_id_t, Message> sendAndBlockAnswers_;
+    mutable std::map<session_id_fake_t, Message> sendAndBlockAnswers_;
     mutable std::condition_variable_any sendAndBlockCondition_;
 
     std::shared_ptr<std::thread> asyncAnswersCleanupThread_;
-    std::mutex cleanupMutex_;
+    mutable std::mutex cleanupMutex_;
     mutable std::condition_variable cleanupCondition_;
     std::atomic<bool> cleanupCancelled_;
 
     mutable std::recursive_mutex sendReceiveMutex_;
-    typedef std::map<session_id_t,
+    typedef std::map<session_id_fake_t,
             std::tuple<
                     std::chrono::steady_clock::time_point,
                     std::shared_ptr<vsomeip::message>,
@@ -327,6 +327,8 @@ private:
 
     std::map<service_id_t, std::map<instance_id_t, std::map<eventgroup_id_t, SubsciptionHandler_t>>> subscription_;
     std::mutex subscriptionMutex_;
+
+    std::map<std::shared_ptr<vsomeip::message>, session_id_fake_t> errorResponses_;
 };
 
 

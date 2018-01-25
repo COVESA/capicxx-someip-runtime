@@ -44,6 +44,8 @@ typedef uint32_t AvailabilityHandlerId_t;
 typedef std::function<void (std::shared_ptr<Proxy>, service_id_t, instance_id_t, bool, void*)> AvailabilityHandler_t;
 typedef std::function<bool (client_id_t, bool) > SubsciptionHandler_t;
 
+typedef std::uint32_t session_id_fake_t;
+
 class Message;
 typedef std::function<bool (const Message &) > MessageHandler_t;
 
