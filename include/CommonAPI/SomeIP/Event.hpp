@@ -67,11 +67,10 @@ protected:
         }
 
         virtual void onEventMessage(const Message &_message) {
-            notificationMutex_.lock();
+            std::lock_guard<std::mutex> itsLock(notificationMutex_);
             if (auto ptr = proxy_.lock()) {
                 event_->handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
             }
-            notificationMutex_.unlock();
         }
 
         virtual void onError(const uint16_t _errorCode, const uint32_t _tag) {

@@ -1,5 +1,10 @@
 Changes
 =======
+
+v3.1.12.10
+- Ensure subsequent event delivery after uncatched exceptions in
+  registered event handlers by the user
+
 v3.1.12.9
 - support 'lock functors' in AttributeDispatcher(s)
 

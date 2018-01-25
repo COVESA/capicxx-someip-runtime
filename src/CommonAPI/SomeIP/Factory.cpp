@@ -70,7 +70,7 @@ void
 Factory::registerProxyCreateMethod(
     const std::string &_interface,
     ProxyCreateFunction _function) {
-    COMMONAPI_INFO("Registering function for creating \"", _interface,
+    COMMONAPI_VERBOSE("Registering function for creating \"", _interface,
             "\" proxy.");
     proxyCreateFunctions_[_interface] = _function;
 }
@@ -90,7 +90,7 @@ Factory::createProxy(
     const std::string &_interface, const std::string &_instance,
     const ConnectionId_t &_connectionId) {
 
-    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":",
+    COMMONAPI_VERBOSE("Creating proxy for \"", _domain, ":", _interface, ":",
             _instance, "\"");
 
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
@@ -121,7 +121,7 @@ Factory::createProxy(
     const std::string &_interface, const std::string &_instance,
     std::shared_ptr<MainLoopContext> _context) {
 
-    COMMONAPI_INFO("Creating proxy for \"", _domain, ":", _interface, ":",
+    COMMONAPI_VERBOSE("Creating proxy for \"", _domain, ":", _interface, ":",
             _instance, "\"");
 
     auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
