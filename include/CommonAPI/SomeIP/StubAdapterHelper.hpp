@@ -756,12 +756,13 @@ template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ 
 class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
  public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
+    typedef void (StubClass_::*LockStubFunctor)(bool);
     typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
     typedef typename StubClass_::StubAdapterType StubAdapterType;
     typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
-    GetAttributeStubDispatcher(GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
-        : getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
+    GetAttributeStubDispatcher(LockStubFunctor _lockStubFunctor, GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
+        : lockStubFunctor_(_lockStubFunctor), getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
     }
 
     bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
@@ -780,10 +781,9 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
 
         std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
 
-        auto stubAdapter = stub->StubType::getStubAdapter();
-        stubAdapter->lockAttributes();
+        (stub.get()->*lockStubFunctor_)(true);
         auto deployable = CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
-        stubAdapter->unlockAttributes();
+        (stub.get()->*lockStubFunctor_)(false);
 
         outputStream << deployable;
         outputStream.flush();
@@ -791,6 +791,7 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
         return _connection->sendMessage(reply);
     }
 
+    LockStubFunctor lockStubFunctor_;
     GetStubFunctor getStubFunctor_;
     bool isLittleEndian_;
     AttributeDepl_ *depl_;
@@ -802,16 +803,18 @@ class SetAttributeStubDispatcher: public GetAttributeStubDispatcher<StubClass_, 
 public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
 
+    typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::LockStubFunctor LockStubFunctor;
     typedef typename GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
     typedef bool (RemoteEventHandlerType::*OnRemoteSetFunctor)(std::shared_ptr<CommonAPI::ClientId>, AttributeType_);
     typedef void (RemoteEventHandlerType::*OnRemoteChangedFunctor)();
 
-    SetAttributeStubDispatcher(GetStubFunctor getStubFunctor,
+    SetAttributeStubDispatcher(LockStubFunctor lockStubFunctor,
+                               GetStubFunctor getStubFunctor,
                                OnRemoteSetFunctor onRemoteSetFunctor,
                                OnRemoteChangedFunctor onRemoteChangedFunctor,
                                bool _isLittleEndian,
                                AttributeDepl_ *_depl = nullptr)
-        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor, _isLittleEndian, _depl),
+        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(lockStubFunctor, getStubFunctor, _isLittleEndian, _depl),
           onRemoteSetFunctor_(onRemoteSetFunctor),
           onRemoteChangedFunctor_(onRemoteChangedFunctor) {
     }
@@ -871,19 +874,22 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef typename StubClass_::StubAdapterType StubAdapterType;
 
+    typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::LockStubFunctor LockStubFunctor;
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::GetStubFunctor GetStubFunctor;
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteSetFunctor OnRemoteSetFunctor;
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteChangedFunctor OnRemoteChangedFunctor;
     typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
     typedef void (StubAdapterType::*FireChangedFunctor)(const AttributeType_&);
 
-    SetObservableAttributeStubDispatcher(GetStubFunctor getStubFunctor,
+    SetObservableAttributeStubDispatcher(LockStubFunctor lockStubFunctor,
+                                         GetStubFunctor getStubFunctor,
                                          OnRemoteSetFunctor onRemoteSetFunctor,
                                          OnRemoteChangedFunctor onRemoteChangedFunctor,
                                          FireChangedFunctor fireChangedFunctor,
                                          bool _isLittleEndian,
                                          AttributeDepl_ *_depl = nullptr)
-        : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(getStubFunctor,
+        : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(lockStubFunctor,
+                                                                 getStubFunctor,
                                                                  onRemoteSetFunctor,
                                                                  onRemoteChangedFunctor,
                                                                  _isLittleEndian,
@@ -910,9 +916,9 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
  private:
     inline void fireAttributeValueChanged(std::shared_ptr<CommonAPI::ClientId> _client, const std::shared_ptr<StubClass_> _stub) {
         auto stubAdapter = _stub->StubType::getStubAdapter();
-        stubAdapter->lockAttributes();
+        (_stub.get()->*SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::lockStubFunctor_)(true);
         (stubAdapter.get()->*fireChangedFunctor_)(this->getAttributeValue(_client, _stub));
-        stubAdapter->unlockAttributes();
+        (_stub.get()->*SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::lockStubFunctor_)(false);
     }
 
     const FireChangedFunctor fireChangedFunctor_;

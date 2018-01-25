@@ -1,5 +1,7 @@
 Changes
 =======
+v3.1.12.9
+- support 'lock functors' in AttributeDispatcher(s)
 
 v3.1.12.8
 - Fixed data race in generated StubDefault when using attributes
