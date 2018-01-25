@@ -1,5 +1,10 @@
 Changes
 =======
+
+v3.1.12.4
+- Fixed calling of on$(BROADCASTNAME)SelectiveSubscriptionChanged
+  hooks within correct thread context if mainloop integration is used
+
 v3.1.12.3
 - Avoid holding mutex when pushing to mainloop queue
 

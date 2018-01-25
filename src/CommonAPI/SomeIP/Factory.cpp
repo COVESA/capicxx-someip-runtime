@@ -272,9 +272,9 @@ Factory::unregisterStub(const std::string &_domain,
         return false;
     }
 
-    decrementConnection(connection);
-
     servicesMutex_.unlock();
+
+    decrementConnection(connection);
 
     return true;
 }

@@ -324,6 +324,9 @@ private:
         std::map<instance_id_t,
             std::map<eventgroup_id_t,
                 std::map<event_id_t, std::uint32_t>>>> requestedEvents_;
+
+    std::map<service_id_t, std::map<instance_id_t, std::map<eventgroup_id_t, SubsciptionHandler_t>>> subscription_;
+    std::mutex subscriptionMutex_;
 };
 
 

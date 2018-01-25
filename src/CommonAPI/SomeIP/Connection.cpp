@@ -1068,11 +1068,66 @@ void Connection::queueSubscriptionStatusHandler(service_id_t serviceId,
 
 void Connection::registerSubsciptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) {
-    application_->register_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, _handler);
+
+    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+    subscription_[_address.getService()][_address.getInstance()][_eventgroup] = _handler;
+
+    if (auto lockedContext = mainLoopContext_.lock()) {
+        (void)lockedContext;
+
+        // create async subscription handler which notifies the stack about
+        // the subscription result (accepted or not)
+        auto self = shared_from_this();
+        auto itsAsyncSubscriptionHandler = [this, self, _address, _eventgroup](
+            client_id_t _client,
+            bool _subscribe,
+            std::function<void(const bool)> _accepted_cb) {
+
+            // hooks must be called by the mainloop
+            proxyPushFunctionToMainLoop([this, _client, _subscribe, _accepted_cb, _address, _eventgroup]() {
+                SubsciptionHandler_t itsHandler;
+                {
+                    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+                    auto foundService = subscription_.find(_address.getService());
+                    if (foundService != subscription_.end()) {
+                        auto foundInstance = foundService->second.find(_address.getInstance());
+                        if (foundInstance != foundService->second.end()) {
+                            auto foundEventgroup = foundInstance->second.find(_eventgroup);
+                            if (foundEventgroup != foundInstance->second.end()) {
+                                itsHandler = foundEventgroup->second;
+                            }
+                        }
+                    }
+                }
+                if(itsHandler) {
+                    _accepted_cb(itsHandler(_client, _subscribe));
+                } else {
+                    _accepted_cb(true);
+                }
+            });
+
+        };
+        application_->register_async_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, itsAsyncSubscriptionHandler);
+    } else {
+        application_->register_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, _handler);
+    }
 }
 
 void Connection::unregisterSubsciptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup) {
+    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+    {
+        auto foundService = subscription_.find(_address.getService());
+        if (foundService != subscription_.end()) {
+            auto foundInstance = foundService->second.find(_address.getInstance());
+            if (foundInstance != foundService->second.end()) {
+                auto foundEventgroup = foundInstance->second.find(_eventgroup);
+                if (foundEventgroup != foundInstance->second.end()) {
+                    foundInstance->second.erase(_eventgroup);
+                }
+            }
+        }
+    }
     application_->unregister_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup);
 }
 
