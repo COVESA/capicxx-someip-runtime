@@ -321,7 +321,9 @@ void Connection::cleanup() {
                     std::shared_ptr<MsgQueueEntry> msg_queue_entry =
                             std::make_shared<MsgQueueEntry>(
                                     response, commDirectionType::PROXYRECEIVE);
+                    itsLock.unlock();
                     watch_->pushQueue(msg_queue_entry);
+                    itsLock.lock();
                 } else {
                     try {
                         itsLock.unlock();
