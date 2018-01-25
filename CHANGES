@@ -1,5 +1,8 @@
 Changes
 =======
+v3.1.12.2
+- Always call subscribe with TCP_AND_UDP subscription type
+- Support for NUL (U+0000) code point within strings
 
 v3.1.12.1
 - Adapt to vSomeIP 2.8.0: Don't call subscription status handler on SubscribeEventGroupNACK for non selective subscriptions

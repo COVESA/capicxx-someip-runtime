@@ -248,26 +248,30 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
                 {
                     case StringEncoding::UTF16BE:
                         while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
-                        	itsSize--;
+                            itsSize--;
 
                         if (itsSize % 2 != 0) {
-                        	errorOccurred_ = true;
+                            errorOccurred_ = true;
                         }
 
-                        if(!hasError())
+                        if(!hasError()) {
                             encoder->utf16To8((byte_t *) data, BIG_ENDIAN, itsSize - 2, status, &bytes, length);
+                            itsSize = static_cast<uint32_t>(length);
+                        }
                         break;
 
                     case StringEncoding::UTF16LE:
                         while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
-                        	itsSize--;
+                            itsSize--;
 
                         if (itsSize % 2 != 0) {
-                        	errorOccurred_ = true;
+                            errorOccurred_ = true;
                         }
 
-                        if(!hasError())
+                        if(!hasError()) {
                             encoder->utf16To8((byte_t *) data, LITTLE_ENDIAN, itsSize - 2, status, &bytes, length);
+                            itsSize = static_cast<uint32_t>(length);
+                        }
                         break;
 
                     default:
@@ -301,14 +305,15 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
                 errorOccurred_ = true;
         }
         if (bytes == NULL) {
-	        _value = "";
-	    } else {
-	        _value = (char*)bytes;
-	        //only delete bytes if not allocated in this function (this is the case for deployed fixed length UTF8 strings)
-	        if( bytes != (byte_t *) data)
-	            delete[] bytes;
-	        bytes = NULL;
-	    }
+            _value = "";
+        } else {
+            // explicitly assign to support NUL (U+0000 code point) in UTF-8 strings
+            _value.assign(std::string((const char*)bytes, itsSize - 1u));
+            //only delete bytes if not allocated in this function (this is the case for deployed fixed length UTF8 strings)
+            if( bytes != (byte_t *) data)
+                delete[] bytes;
+            bytes = NULL;
+        }
     }
 
     return *this;

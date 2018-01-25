@@ -36,31 +36,31 @@ void ErrQueueEntry::process(std::shared_ptr<Connection> _connection) {
 }
 
 void Connection::receive(const std::shared_ptr<vsomeip::message> &_message) {
-	commDirectionType itsDirection =
-			(_message->get_message_type() < vsomeip::message_type_e::MT_NOTIFICATION ?
-			commDirectionType::STUBRECEIVE : commDirectionType::PROXYRECEIVE);
+    commDirectionType itsDirection =
+            (_message->get_message_type() < vsomeip::message_type_e::MT_NOTIFICATION ?
+            commDirectionType::STUBRECEIVE : commDirectionType::PROXYRECEIVE);
 
-	// avoid blocking the mainloop
-	bool isSendAndBlockAnswer = false;
-	{
-	    std::lock_guard<std::recursive_mutex> itsLock(sendReceiveMutex_);
-	    if(_message->get_message_type() != vsomeip::message_type_e::MT_NOTIFICATION &&
-	            sendAndBlockAnswers_.find(_message->get_session()) != sendAndBlockAnswers_.end()) {
-	        isSendAndBlockAnswer = true;
-	    }
-	}
+    // avoid blocking the mainloop
+    bool isSendAndBlockAnswer = false;
+    {
+        std::lock_guard<std::recursive_mutex> itsLock(sendReceiveMutex_);
+        if(_message->get_message_type() != vsomeip::message_type_e::MT_NOTIFICATION &&
+                sendAndBlockAnswers_.find(_message->get_session()) != sendAndBlockAnswers_.end()) {
+            isSendAndBlockAnswer = true;
+        }
+    }
 
     if (auto lockedContext = mainLoopContext_.lock() && !isSendAndBlockAnswer) {
         (void)lockedContext;
         std::shared_ptr<MsgQueueEntry> msg_queue_entry
-			= std::make_shared<MsgQueueEntry>(_message, itsDirection);
+            = std::make_shared<MsgQueueEntry>(_message, itsDirection);
         watch_->pushQueue(msg_queue_entry);
     } else {
-    	if (itsDirection == commDirectionType::PROXYRECEIVE) {
-    		handleProxyReceive(_message);
-    	} else {
-    		handleStubReceive(_message);
-    	}
+        if (itsDirection == commDirectionType::PROXYRECEIVE) {
+            handleProxyReceive(_message);
+        } else {
+            handleStubReceive(_message);
+        }
     }
 }
 
@@ -127,7 +127,11 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
             callStatus = CallStatus::REMOTE_ERROR;
         }
 
-        itsHandler->onMessageReply(callStatus, Message(_message));
+        try {
+            itsHandler->onMessageReply(callStatus, Message(_message));
+        } catch (const std::exception& e) {
+            COMMONAPI_ERROR("Message reply failed(", e.what(), ")");
+        }
         return;
     }
 
@@ -139,7 +143,11 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
         asyncTimeouts_.erase(sessionId);
         sendReceiveMutex_.unlock();
 
-        itsHandler->onMessageReply(CallStatus::REMOTE_ERROR, Message(_message));
+        try {
+            itsHandler->onMessageReply(CallStatus::REMOTE_ERROR, Message(_message));
+        } catch (const std::exception& e) {
+            COMMONAPI_ERROR("Message reply failed on timeout(", e.what(), ")");
+        }
     } else {
         sendReceiveMutex_.unlock();
     }
@@ -207,8 +215,12 @@ void Connection::handleAvailabilityChange(const service_id_t _service,
                     watch_->pushQueue(msg_queue_entry);
                     asyncTimeouts_[it->first] = std::move(it->second);
                 } else {
-                    std::get<2>(it->second)->onMessageReply(
-                            CallStatus::REMOTE_ERROR, Message(itsResponse));
+                    try {
+                        std::get<2>(it->second)->onMessageReply(
+                                CallStatus::REMOTE_ERROR, Message(itsResponse));
+                    } catch (const std::exception& e) {
+                        COMMONAPI_ERROR("Message reply failed when service became unavailable(", e.what(), ")");
+                    }
                 }
                 it = asyncAnswers_.erase(it);
             } else {
@@ -273,7 +285,11 @@ void Connection::cleanup() {
                         watch_->pushQueue(msg_queue_entry);
                         asyncTimeouts_[it->first] = std::move(it->second);
                     } else {
-                        std::get<2>(it->second)->onMessageReply(CallStatus::REMOTE_ERROR, Message(response));
+                        try {
+                            std::get<2>(it->second)->onMessageReply(CallStatus::REMOTE_ERROR, Message(response));
+                        } catch (const std::exception& e) {
+                            COMMONAPI_ERROR("Message reply failed on cleanup(", e.what(), ")");
+                        }
                     }
                     it = asyncAnswers_.erase(it);
                 } else {
@@ -349,7 +365,7 @@ bool Connection::attachMainLoopContext(std::weak_ptr<MainLoopContext> mainLoopCo
 
 bool Connection::connect(bool) {
     if (!application_->init())
-    	return false;
+        return false;
 
     std::function<void(state_type_e)> connectionHandler = std::bind(&Connection::onConnectionEvent,
                                                                     shared_from_this(),
@@ -466,12 +482,12 @@ Message Connection::sendMessageWithReplyAndBlock(
         const Message& message,
         const CommonAPI::CallInfo *_info) const {
 
-	if (!isConnected())
+    if (!isConnected())
         return Message();
 
     std::unique_lock<std::recursive_mutex> lock(sendReceiveMutex_);
 
-	std::pair<std::map<session_id_t, Message>::iterator, bool> itsAnswer;
+    std::pair<std::map<session_id_t, Message>::iterator, bool> itsAnswer;
     application_->send(message.message_, true);
     if (_info->sender_ != 0) {
         COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
@@ -601,7 +617,7 @@ void Connection::subscribe(service_id_t serviceId, instance_id_t instanceId,
             eventHandler, _tag);
 
     application_->subscribe(serviceId, instanceId, eventGroupId, major,
-            vsomeip::subscription_type_e::SU_PREFER_RELIABLE, eventId);
+            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
 }
 
 void Connection::addSubscriptionStatusListener(service_id_t serviceId,

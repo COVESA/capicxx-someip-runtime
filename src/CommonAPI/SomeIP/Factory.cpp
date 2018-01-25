@@ -43,27 +43,27 @@ Factory::~Factory() {
 void
 Factory::init() {
 #ifndef _WIN32
-	std::lock_guard<std::mutex> itsLock(initializerMutex_);
+    std::lock_guard<std::mutex> itsLock(initializerMutex_);
 #endif
-	if (!isInitialized_) {
-		for (auto i : initializers_) i();
-		initializers_.clear(); // Not needed anymore
-		isInitialized_ = true;
-	}
+    if (!isInitialized_) {
+        for (auto i : initializers_) i();
+        initializers_.clear(); // Not needed anymore
+        isInitialized_ = true;
+    }
 }
 
 void
 Factory::registerInterface(InterfaceInitFunction _function) {
 #ifndef _WIN32
-	std::lock_guard<std::mutex> itsLock(initializerMutex_);
+    std::lock_guard<std::mutex> itsLock(initializerMutex_);
 #endif
-	if (isInitialized_) {
-		// We are already running --> initialize the interface library!
-		_function();
-	} else {
-		// We are not initialized --> save the initializer
-		initializers_.push_back(_function);
-	}
+    if (isInitialized_) {
+        // We are already running --> initialize the interface library!
+        _function();
+    } else {
+        // We are not initialized --> save the initializer
+        initializers_.push_back(_function);
+    }
 }
 
 void
@@ -198,17 +198,17 @@ Factory::registerStub(
         CommonAPI::Address address(_domain, _interface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
-        	std::shared_ptr<Connection> itsConnection = getConnection(_context);
-        	if (itsConnection) {
-				std::shared_ptr<StubAdapter> adapter
-					= stubAdapterCreateFunctionsIterator->second(
-					        someipAddress, itsConnection, _stub);
-				if (adapter) {
-					adapter->init(adapter);
-					if (registerStubAdapter(adapter))
-					    return true;
-				}
-        	}
+            std::shared_ptr<Connection> itsConnection = getConnection(_context);
+            if (itsConnection) {
+                std::shared_ptr<StubAdapter> adapter
+                    = stubAdapterCreateFunctionsIterator->second(
+                            someipAddress, itsConnection, _stub);
+                if (adapter) {
+                    adapter->init(adapter);
+                    if (registerStubAdapter(adapter))
+                        return true;
+                }
+            }
         }
     }
 
@@ -351,10 +351,10 @@ Factory::getConnection(const ConnectionId_t &_connectionId) {
             = std::make_shared<Connection>(_connectionId);
     if (itsConnection) {
         if (!itsConnection->connect(true)) {
-        	COMMONAPI_ERROR("Failed to create connection ", _connectionId);
-        	itsConnection.reset();
+            COMMONAPI_ERROR("Failed to create connection ", _connectionId);
+            itsConnection.reset();
         } else {
-        	connections_.insert({ _connectionId, itsConnection } );
+            connections_.insert({ _connectionId, itsConnection } );
         }
     }
 
@@ -380,18 +380,18 @@ Factory::getConnection(std::shared_ptr<MainLoopContext> _context) {
         itsConnection = std::make_shared<Connection>(_context->getName());
         if (itsConnection) {
             if (!itsConnection->connect(false)) {
-            	COMMONAPI_ERROR("Failed to create connection ",
-            			_context->getName());
-            	itsConnection.reset();
+                COMMONAPI_ERROR("Failed to create connection ",
+                        _context->getName());
+                itsConnection.reset();
             } else {
-            	connections_.insert({ _context->getName(), itsConnection } );
+                connections_.insert({ _context->getName(), itsConnection } );
             }
         }
     }
 
     if (itsConnection) {
         incrementConnection(itsConnection);
-    	itsConnection->attachMainLoopContext(_context);
+        itsConnection->attachMainLoopContext(_context);
     }
 
     return itsConnection;

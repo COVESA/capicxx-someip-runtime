@@ -35,18 +35,18 @@ template <
     template <class...> class Out_, class... OutArgs_>
 struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
 
-	template <typename Proxy_ = Proxy>
-	static void callMethod(
-		Proxy_ &_proxy,
-		const method_id_t _methodId,
-		const bool _isReliable,
-		const bool _isLittleEndian,
-		const InArgs_ &... _inArgs,
-		CommonAPI::CallStatus &_callStatus) {
+    template <typename Proxy_ = Proxy>
+    static void callMethod(
+        Proxy_ &_proxy,
+        const method_id_t _methodId,
+        const bool _isReliable,
+        const bool _isLittleEndian,
+        const InArgs_ &... _inArgs,
+        CommonAPI::CallStatus &_callStatus) {
 
-		Message methodCall = _proxy.createMethodCall(_methodId, _isReliable);
-		callMethod(_proxy, methodCall, _isLittleEndian, _inArgs..., _callStatus);
-	}
+        Message methodCall = _proxy.createMethodCall(_methodId, _isReliable);
+        callMethod(_proxy, methodCall, _isLittleEndian, _inArgs..., _callStatus);
+    }
 
     template <typename Proxy_ = Proxy>
     static void callMethod(

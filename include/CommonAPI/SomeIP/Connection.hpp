@@ -196,9 +196,9 @@ public:
 
     virtual void processMsgQueueEntry(MsgQueueEntry &_msgQueueEntry);
     virtual void processAvblQueueEntry(AvblQueueEntry &_avblQueueEntry);
-	virtual void processErrQueueEntry(ErrQueueEntry &_errQueueEntry);
+    virtual void processErrQueueEntry(ErrQueueEntry &_errQueueEntry);
 
-	template<class Function, class... Arguments>
+    template<class Function, class... Arguments>
     void processFunctionQueueEntry(FunctionQueueEntry<Function, Arguments ...> &_functionQueueEntry);
 
     virtual const ConnectionId_t& getConnectionId();
