@@ -361,7 +361,8 @@ Connection::Connection(const std::string &_name)
         application_(vsomeip::runtime::get()->create_application(_name)),
         asyncAnswersCleanupThread_(NULL),
         cleanupCancelled_(false),
-        activeConnections_(0) {
+        activeConnections_(0),
+        lastSessionId_(0) {
     std::string appId = Runtime::getProperty("LogApplication");
     std::string contextId = Runtime::getProperty("LogContext");
 
@@ -497,6 +498,7 @@ bool Connection::sendMessageWithReplyAsync(
         std::unique_ptr<MessageReplyAsyncHandler> messageReplyAsyncHandler,
         const CommonAPI::CallInfo *_info) const {
 
+
     if (!isConnected())
         return false;
 
@@ -504,6 +506,11 @@ bool Connection::sendMessageWithReplyAsync(
     {
         std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
         application_->send(message.message_, true);
+        const vsomeip::session_t itsSession = message.getSessionId();
+        if (lastSessionId_ == itsSession) {
+            return false;
+        }
+        lastSessionId_ = itsSession;
 
         if (_info->sender_ != 0) {
             COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
@@ -515,7 +522,7 @@ bool Connection::sendMessageWithReplyAsync(
                 (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
                         + std::chrono::milliseconds(_info->timeout_);
 
-        asyncAnswers_[message.getSessionId()] = std::make_tuple(
+        asyncAnswers_[itsSession] = std::make_tuple(
                 timeoutTime, message.message_,
                 std::move(messageReplyAsyncHandler));
     }
@@ -546,10 +553,13 @@ Message Connection::sendMessageWithReplyAndBlock(
     }
 
     itsAnswer = sendAndBlockAnswers_.emplace(message.getSessionId(), Message());
+    Message itsResult;
+    if (!itsAnswer.second) {
+        return itsResult;
+    }
 
     std::cv_status waitStatus = std::cv_status::no_timeout;
 
-    Message itsResult;
 
     std::chrono::steady_clock::time_point elapsed(
             std::chrono::steady_clock::now()
@@ -851,8 +861,27 @@ Connection::unregisterService(const Address &_address) {
     major_version_t major = _address.getMajorVersion();
     minor_version_t minor = _address.getMinorVersion();
 
+    std::set<vsomeip::event_t> itsEvents;
+    {
+        std::lock_guard<std::mutex> itsLock(registeredEventsMutex_);
+        const auto foundService = registeredEvents_.find(service);
+        if (foundService != registeredEvents_.end()) {
+            const auto foundInstance = foundService->second.find(instance);
+            if (foundInstance != foundService->second.end()) {
+                itsEvents = foundInstance->second;
+                foundService->second.erase(foundInstance);
+                if (!foundService->second.size()) {
+                    registeredEvents_.erase(foundService);
+                }
+            }
+        }
+    }
+
     application_->stop_offer_service(service, instance, major, minor);
     application_->unregister_message_handler(service, instance, ANY_METHOD);
+    for (const auto e : itsEvents) {
+        application_->stop_offer_event(service, instance, e);
+    }
 }
 
 void
@@ -918,6 +947,22 @@ Connection::releaseService(const Address &_address) {
 void
 Connection::registerEvent(service_id_t _service, instance_id_t _instance,
         event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) {
+    {
+        std::lock_guard<std::mutex> itsLock(registeredEventsMutex_);
+        bool found(false);
+        const auto foundService = registeredEvents_.find(_service);
+        if (foundService != registeredEvents_.end()) {
+            const auto foundInstance = foundService->second.find(_instance);
+            if (foundInstance != foundService->second.end()) {
+                foundInstance->second.insert(_event);
+                found = true;
+            }
+        }
+
+        if (!found) {
+            registeredEvents_[_service][_instance].insert(_event);
+        }
+    }
     application_->offer_event(_service, _instance,
             _event, _eventGroups, _isField);
 }
@@ -925,6 +970,22 @@ Connection::registerEvent(service_id_t _service, instance_id_t _instance,
 void
 Connection::unregisterEvent(service_id_t _service, instance_id_t _instance,
         event_id_t _event) {
+    {
+        std::lock_guard<std::mutex> itsLock(registeredEventsMutex_);
+        const auto foundService = registeredEvents_.find(_service);
+        if (foundService != registeredEvents_.end()) {
+            const auto foundInstance = foundService->second.find(_instance);
+            if (foundInstance != foundService->second.end()) {
+                foundInstance->second.erase(_event);
+                if (!foundInstance->second.size()) {
+                    foundService->second.erase(foundInstance);
+                    if (!foundService->second.size()) {
+                        registeredEvents_.erase(foundService);
+                    }
+                }
+            }
+        }
+    }
     application_->stop_offer_event(_service, _instance, _event);
 }
 

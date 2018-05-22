@@ -1,6 +1,10 @@
 Changes
 =======
 
+v3.1.12.12
+- Fix deregistration of events upon service deregistration
+- Improve error handling on send errors
+
 v3.1.12.11
 - Set default build type to RelWithDebInfo when not specified
   explicitly.

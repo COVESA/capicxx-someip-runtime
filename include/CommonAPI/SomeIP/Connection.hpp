@@ -329,6 +329,13 @@ private:
     std::mutex subscriptionMutex_;
 
     std::map<std::shared_ptr<vsomeip::message>, session_id_fake_t> errorResponses_;
+
+    // registered events from stubs
+    std::mutex registeredEventsMutex_;
+    std::map<vsomeip::service_t,
+            std::map<vsomeip::instance_t, std::set<vsomeip::event_t>>> registeredEvents_;
+
+    mutable session_id_t lastSessionId_;
 };
 
 
