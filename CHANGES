@@ -1,6 +1,26 @@
 Changes
 =======
 
+v3.1.12.17
+- Fix race condition which could occur when doing calls on an
+  unavailable proxy. The race could lead to waiting the complete
+  specified timeout before sending out the request instead of sending
+  it out directly if the proxy got available in the meantime.
+
+v3.1.12.16
+- Fix handling of broken UTF16 surrogate pairs
+
+v3.1.12.14
+- Ensure vsomeip message delivery via mainloop thread
+  on synchronous calls.
+
+v3.1.12.13
+- Deregister dispatch sources later on connection destruction.
+- Improve handling of spurious wakeups caused by system time
+  adjustments.
+- Improve robustness of Inputstream regarding malformed messages
+  containing Variants.
+
 v3.1.12.12
 - Fix deregistration of events upon service deregistration
 - Improve error handling on send errors

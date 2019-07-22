@@ -177,7 +177,7 @@ public:
         bitAlign();
 
         uint32_t serial;
-        _readBitValue(serial, 32, false);
+        errorOccurred_ = _readBitValue(serial, 32, false);
         if (!hasError()) {
             _value = Polymorphic_Struct::create(serial);
             _value->template readValue<InputStream>(*this, _depl);
@@ -200,8 +200,8 @@ public:
             DeleteVisitor<maxSize> visitor(_value.valueStorage_);
             ApplyVoidVisitor<DeleteVisitor<maxSize>,
                 Variant<Types_...>, Types_... >::visit(visitor, _value);
-            _value.valueType_ = 0;
         }
+        _value.valueType_ = 0;
 
         uint32_t itsSize;
         uint32_t itsType;
@@ -218,7 +218,7 @@ public:
             readValue(itsSize, unionLengthWidth, true);
         }
 
-        if(!itsType)
+        if (!itsType)
             errorOccurred_ = true;
 
         if (!hasError()) {
@@ -427,7 +427,7 @@ public:
 
         _value.clear();
 
-        _readBitValue(itsSize, 32, false);
+        errorOccurred_ = _readBitValue(itsSize, 32, false);
 
         while (itsSize > 0) {
             size_t remainingBeforeRead = remaining_;

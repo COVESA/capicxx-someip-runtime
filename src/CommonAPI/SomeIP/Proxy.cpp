@@ -58,9 +58,9 @@ void Proxy::availabilityTimeoutThreadHandler() const {
     // their required data in a list of tuples.
     typedef std::tuple<
             isAvailableAsyncCallback,
-            std::promise<AvailabilityStatus>,
             AvailabilityStatus,
-            std::chrono::steady_clock::time_point
+            std::chrono::steady_clock::time_point,
+            std::list<AvailabilityTimeout_t>::iterator
             > CallbackData_t;
     std::list<CallbackData_t> callbacks;
 
@@ -100,25 +100,25 @@ void Proxy::availabilityTimeoutThreadHandler() const {
                     std::chrono::steady_clock::time_point timepoint_;
                     if(isAvailable()) {
                         availabilityMutex_.lock();
-                        callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
+                        callbacks.push_back(std::make_tuple(callback,
                                                             AvailabilityStatus::AVAILABLE,
-                                                            timepoint_));
+                                                            timepoint_, it));
                     } else {
                         availabilityMutex_.lock();
-                        callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
+                        callbacks.push_back(std::make_tuple(callback,
                                                             AvailabilityStatus::NOT_AVAILABLE,
-                                                            timepoint_));
+                                                            timepoint_, it));
                     }
-                    it = timeouts_.erase(it);
+                    ++it;
                     availabilityMutex_.unlock();
                 } else {
                     //timeout not expired
                     if(isAvailable()) {
                         availabilityMutex_.lock();
-                        callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
+                        callbacks.push_back(std::make_tuple(callback,
                                                             AvailabilityStatus::AVAILABLE,
-                                                            minTimeout));
-                        it = timeouts_.erase(it);
+                                                            minTimeout, it));
+                        ++it;
                         availabilityMutex_.unlock();
                     } else {
                         ++it;
@@ -131,7 +131,9 @@ void Proxy::availabilityTimeoutThreadHandler() const {
 
             if(firstIteration) {
                 firstIteration = false;
-                continue;
+                if (!isAvailable()) {
+                    continue;
+                }
             }
 
             //timeout not expired
@@ -142,10 +144,10 @@ void Proxy::availabilityTimeoutThreadHandler() const {
 
                 if(isAvailable()) {
                     availabilityMutex_.lock();
-                    callbacks.push_back(std::make_tuple(callback, std::move(std::get<2>(*it)),
+                    callbacks.push_back(std::make_tuple(callback,
                                                         AvailabilityStatus::AVAILABLE,
-                                                        minTimeout));
-                    it = timeouts_.erase(it);
+                                                        minTimeout, it));
+                    ++it;
                     availabilityMutex_.unlock();
                 } else {
                     ++it;
@@ -164,26 +166,29 @@ void Proxy::availabilityTimeoutThreadHandler() const {
         auto it = callbacks.begin();
         while(it != callbacks.end()) {
             callback = std::get<0>(*it);
-            avStatus = std::get<2>(*it);
+            avStatus = std::get<1>(*it);
 
             // compute remaining timeout
             now = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
-            remainingTimeout = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::get<3>(*it) - now).count();
+            remainingTimeout = (int)std::chrono::duration_cast<std::chrono::milliseconds>(std::get<2>(*it) - now).count();
             if(remainingTimeout < 0)
                 remainingTimeout = 0;
 
             threadLock.unlock();
 
-            std::get<1>(*it).set_value(avStatus);
             callback(avStatus, remainingTimeout);
 
             threadLock.lock();
 
-            it = callbacks.erase(it);
+            ++it;
         }
 
         //cancel thread
         timeoutsMutex_.lock();
+        for (const auto& cb : callbacks) {
+            timeouts_.erase(std::get<3>(cb));
+        }
+        callbacks.clear();
         if(timeouts_.size() == 0 && callbacks.size() == 0)
             finish = true;
         timeoutsMutex_.unlock();
@@ -340,9 +345,6 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
             isAvailableAsyncCallback _callback,
             const CommonAPI::CallInfo *_info) const {
 
-    std::promise<AvailabilityStatus> promise;
-    std::future<AvailabilityStatus> future = promise.get_future();
-
     //set timeout point
     auto timeoutPoint = (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now() + std::chrono::milliseconds(_info->timeout_);
 
@@ -366,7 +368,7 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
             }
         }
         //add new timeout
-        timeouts_.push_back(std::make_tuple(timeoutPoint, _callback, std::move(promise)));
+        timeouts_.push_back(std::make_tuple(timeoutPoint, _callback, std::promise<AvailabilityStatus>()));
 
         //start availability thread
         if(!isAvailabilityTimeoutThread)
@@ -375,7 +377,7 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
                               shared_from_this()));
     } else {
         //add timeout
-        timeouts_.push_back(std::make_tuple(timeoutPoint, _callback, std::move(promise)));
+        timeouts_.push_back(std::make_tuple(timeoutPoint, _callback, std::promise<AvailabilityStatus>()));
     }
     timeoutsMutex_.unlock();
 
@@ -384,7 +386,7 @@ std::future<AvailabilityStatus> Proxy::isAvailableAsync(
     availabilityTimeoutCondition_.notify_all();
     availabilityTimeoutThreadMutex_.unlock();
 
-    return future;
+    return std::future<AvailabilityStatus>();
 }
 
 AvailabilityStatus Proxy::getAvailabilityStatus() const {

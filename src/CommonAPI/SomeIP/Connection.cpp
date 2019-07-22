@@ -40,9 +40,9 @@ void Connection::receive(const std::shared_ptr<vsomeip::message> &_message) {
             (_message->get_message_type() < vsomeip::message_type_e::MT_NOTIFICATION ?
             commDirectionType::STUBRECEIVE : commDirectionType::PROXYRECEIVE);
 
-    // avoid blocking the mainloop
+    // avoid blocking the mainloop when a synchronous call in a callback was done
     bool isSendAndBlockAnswer = false;
-    {
+    if (itsDirection == commDirectionType::PROXYRECEIVE) {
         std::lock_guard<std::recursive_mutex> itsLock(sendReceiveMutex_);
         if(_message->get_message_type() != vsomeip::message_type_e::MT_NOTIFICATION &&
                 sendAndBlockAnswers_.find(_message->get_session()) != sendAndBlockAnswers_.end()) {
@@ -175,7 +175,7 @@ void Connection::onConnectionEvent(state_type_e state) {
 void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _instance,
            bool _is_available) {
     {
-        std::lock_guard<std::mutex> itsLock(availabilityCalledMutex_);
+        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         auto its_service = availabilityCalled_.find(_service);
         if (its_service != availabilityCalled_.end()) {
             auto its_instance = its_service->second.find(_instance);
@@ -184,7 +184,6 @@ void Connection::onAvailabilityChange(service_id_t _service, instance_id_t _inst
                 queueSubscriptionStatusHandler(_service, _instance);
             }
         }
-        availabilityCalled_[_service][_instance] = true;
     }
     if (auto lockedContext = mainLoopContext_.lock()) {
         std::shared_ptr<AvblQueueEntry> avbl_queue_entry = std::make_shared<AvblQueueEntry>(
@@ -256,7 +255,7 @@ void Connection::handleAvailabilityChange(const service_id_t _service,
                          std::weak_ptr<Proxy>,
                          void*>> itsHandlers;
     {
-        std::unique_lock<std::mutex> itsLock(availabilityMutex_);
+        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         auto foundService = availabilityHandlers_.find(_service);
         if (foundService != availabilityHandlers_.end()) {
             auto foundInstance = foundService->second.find(_instance);
@@ -271,6 +270,7 @@ void Connection::handleAvailabilityChange(const service_id_t _service,
                     itsHandlers.push_back(h.second);
             }
         }
+        availabilityCalled_[_service][_instance] = true;
     }
 
     for (auto h : itsHandlers) {
@@ -278,7 +278,6 @@ void Connection::handleAvailabilityChange(const service_id_t _service,
             std::get<0>(h)(itsProxy, _service, _instance, _is_available,
                     std::get<2>(h));
     }
-
 }
 
 void Connection::dispatch() {
@@ -374,6 +373,10 @@ Connection::Connection(const std::string &_name)
 }
 
 Connection::~Connection() {
+    if (auto lockedContext = mainLoopContext_.lock()) {
+        lockedContext->deregisterDispatchSource(dispatchSource_);
+        lockedContext->deregisterWatch(watch_);
+    }
     bool shouldDisconnect(false);
     {
         std::lock_guard<std::mutex> itsLock(connectionMutex_);
@@ -422,10 +425,6 @@ bool Connection::connect(bool) {
 }
 
 void Connection::doDisconnect() {
-    if (auto lockedContext = mainLoopContext_.lock()) {
-        lockedContext->deregisterDispatchSource(dispatchSource_);
-        lockedContext->deregisterWatch(watch_);
-    }
     if (asyncAnswersCleanupThread_) {
         {
             std::lock_guard<std::mutex> lg(cleanupMutex_);
@@ -575,16 +574,17 @@ Message Connection::sendMessageWithReplyAndBlock(
             break;
         }
         waitStatus = sendAndBlockCondition_.wait_until(lock, elapsed);
-        if (waitStatus == std::cv_status::timeout || itsAnswer.first->second)
+        if (itsAnswer.first->second || (waitStatus == std::cv_status::timeout && (elapsed < std::chrono::steady_clock::now())))
             break;
     } while (!itsAnswer.first->second);
 
     // If there was an answer (thus, we did not run into the timeout),
     // move it to itsResult
-    if (waitStatus != std::cv_status::timeout) {
+    if (itsAnswer.first->second)  {
         itsResult = std::move(itsAnswer.first->second);
-        sendAndBlockAnswers_.erase(itsAnswer.first);
     }
+
+    sendAndBlockAnswers_.erase(itsAnswer.first);
 
     return itsResult;
 }
@@ -736,7 +736,7 @@ Connection::isAvailable(const Address &_address) {
     }
     {
         bool availabilityCalled(false);
-        std::lock_guard<std::mutex> itsLock(availabilityCalledMutex_);
+        std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         auto its_service = availabilityCalled_.find(_address.getService());
         if (its_service != availabilityCalled_.end()) {
             auto its_instance = its_service->second.find(_address.getInstance());

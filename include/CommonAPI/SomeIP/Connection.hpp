@@ -313,7 +313,6 @@ private:
     std::map<std::tuple<service_id_t, instance_id_t, eventgroup_id_t, event_id_t>,
         std::shared_ptr<SubscriptionStatusWrapper>> subscriptionStates_;
 
-    std::mutex availabilityCalledMutex_;
     std::map<service_id_t, std::map<instance_id_t, bool>> availabilityCalled_;
 
     std::mutex requestedServicesMutex_;

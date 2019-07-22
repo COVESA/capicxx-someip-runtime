@@ -184,19 +184,19 @@ InputStream& InputStream::readValue(uint32_t &_value, const uint8_t &_width, con
     case 1:
         {
             uint8_t temp;
-            _readBitValue(temp, 8, false);
+            errorOccurred_ = _readBitValue(temp, 8, false);
             _value = temp;
         }
         break;
     case 2:
         {
             uint16_t temp;
-            _readBitValue(temp, 16, false);
+            errorOccurred_ = _readBitValue(temp, 16, false);
             _value = temp;
         }
         break;
     case 4:
-        _readBitValue(_value, 32, false);
+    	errorOccurred_ = _readBitValue(_value, 32, false);
         break;
     default:
         errorOccurred_ = true;
@@ -244,46 +244,36 @@ InputStream& InputStream::readValue(std::string &_value, const StringDeployment 
             size_t length = 0;
 
             if (encoder->checkBom(data, itsSize, _depl->stringEncoding_)) {
-                switch (_depl->stringEncoding_)
-                {
-                    case StringEncoding::UTF16BE:
-                        while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
-                            itsSize--;
+                const StringEncoding encoding = _depl->stringEncoding_;
+                if (encoding == StringEncoding::UTF8) {
+                    if (data[itsSize - 1] != 0x00) {
+                        errorOccurred_ = true;
+                    } else {
+                        status = EncodingStatus::SUCCESS;
+                    }
 
-                        if (itsSize % 2 != 0) {
-                            errorOccurred_ = true;
-                        }
+                    bytes = (byte_t *) data;
+                } else { // UTF16BE + UTF16LE
+                    while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
+                        itsSize--;
 
-                        if(!hasError()) {
-                            encoder->utf16To8((byte_t *) data, BIG_ENDIAN, itsSize - 2, status, &bytes, length);
+                    if (itsSize % 2 != 0) {
+                        errorOccurred_ = true;
+                    }
+
+                    if(!hasError()) {
+                        const int endianess = (encoding == StringEncoding::UTF16BE) ? BIG_ENDIAN : LITTLE_ENDIAN;
+                        encoder->utf16To8((byte_t *) data, endianess, itsSize - 2, status, &bytes, length);
+                        if (length) {
                             itsSize = static_cast<uint32_t>(length);
-                        }
-                        break;
-
-                    case StringEncoding::UTF16LE:
-                        while (itsSize > 1 && (data[itsSize - 1] != 0x00 || data[itsSize - 2] != 0x00))
-                            itsSize--;
-
-                        if (itsSize % 2 != 0) {
+                            status = EncodingStatus::SUCCESS;
+                        } else {
                             errorOccurred_ = true;
+                            delete[] bytes;
+                            bytes = NULL;
                         }
-
-                        if(!hasError()) {
-                            encoder->utf16To8((byte_t *) data, LITTLE_ENDIAN, itsSize - 2, status, &bytes, length);
-                            itsSize = static_cast<uint32_t>(length);
-                        }
-                        break;
-
-                    default:
-                        if (data[itsSize - 1] != 0x00) {
-                            errorOccurred_ = true;
-                        }
-
-                        bytes = (byte_t *) data;
-                        break;
+                    }
                 }
-
-                status = EncodingStatus::SUCCESS;
             } else {
                 status = EncodingStatus::INVALID_BOM;
             }
