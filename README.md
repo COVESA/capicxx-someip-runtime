@@ -14,7 +14,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 The user guide can be found in the documentation directory of the CommonAPI-SomeIP-Tools project as AsciiDoc document. A pdf version can be found at https://github.com/GENIVI/capicxx-someip-tools/releases.
 
 ##### Further information
-https://genivi.github.io/capicxx-core-tools/
+https://genivi.github.io/capicxx-someip-tools/
 
 ##### Build Instructions for Linux
 
