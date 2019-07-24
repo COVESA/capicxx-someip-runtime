@@ -140,7 +140,10 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip)
+target_include_directories(CommonAPI-SomeIP INTERFACE
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>)
+target_link_libraries(CommonAPI-SomeIP PUBLIC CommonAPI vsomeip)
 
 if (MSVC)
     target_link_libraries(CommonAPI-SomeIP ws2_32 Rpcrt4)
@@ -177,24 +180,15 @@ export (PACKAGE CommonAPI-SomeIP)
 # Create the CommonAPI-SomeIPConfig.cmake and CommonAPI-SomeIPConfigVersion files
 file (RELATIVE_PATH REL_INCLUDE_DIR "${ABSOLUTE_INSTALL_CMAKE_DIR}" "${ABSOLUTE_INSTALL_INCLUDE_DIR}")
 
-# ... for the build tree
-set (CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/include")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfig.cmake.in
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfig.cmake" @ONLY)
-
-# ... for the install tree
-set (CONF_INCLUDE_DIRS "\${COMMONAPI_SOMEIP_CMAKE_DIR}/${REL_INCLUDE_DIR}")
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfig.cmake.in
-    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CommonAPI-SomeIPConfig.cmake" @ONLY)
-
-# ... for both
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfigVersion.cmake.in
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfigVersion.cmake" @ONLY)
 
 # Install the CommonAPI-SomeIPConfig.cmake and CommonAPI-SomeIPConfigVersion.cmake
 install (
     FILES
-    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CommonAPI-SomeIPConfig.cmake"
+    "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfig.cmake"
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}"
 )
