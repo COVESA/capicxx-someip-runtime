@@ -504,7 +504,7 @@ bool Connection::sendMessageWithReplyAsync(
 
     {
         std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
-        application_->send(message.message_, true);
+        application_->send(message.message_);
         const vsomeip::session_t itsSession = message.getSessionId();
         if (lastSessionId_ == itsSession) {
             return false;
@@ -544,7 +544,7 @@ Message Connection::sendMessageWithReplyAndBlock(
     std::unique_lock<std::recursive_mutex> lock(sendReceiveMutex_);
 
     std::pair<std::map<session_id_fake_t, Message>::iterator, bool> itsAnswer;
-    application_->send(message.message_, true);
+    application_->send(message.message_);
     if (_info->sender_ != 0) {
         COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
                     " - ClientID: ", message.getClientId(),
@@ -676,8 +676,7 @@ void Connection::subscribe(service_id_t serviceId, instance_id_t instanceId,
     insertSubscriptionStatusListener(serviceId, instanceId, eventGroupId, eventId,
             eventHandler, _tag);
 
-    application_->subscribe(serviceId, instanceId, eventGroupId, major,
-            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
+    application_->subscribe(serviceId, instanceId, eventGroupId, major, eventId);
 }
 
 void Connection::addSubscriptionStatusListener(service_id_t serviceId,
@@ -907,9 +906,7 @@ Connection::requestService(const Address &_address, bool _hasSelective) {
         }
     }
     if (!found) {
-        application_->request_service(service, instance,
-                                      majorVersion, minorVersion,
-                                      _hasSelective);
+        application_->request_service(service, instance, majorVersion, minorVersion);
 
         vsomeip::message_handler_t handler
             = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
@@ -963,8 +960,7 @@ Connection::registerEvent(service_id_t _service, instance_id_t _instance,
             registeredEvents_[_service][_instance].insert(_event);
         }
     }
-    application_->offer_event(_service, _instance,
-            _event, _eventGroups, _isField);
+    application_->offer_event(_service, _instance, _event, _eventGroups);
 }
 
 void
@@ -1018,8 +1014,7 @@ Connection::requestEvent(service_id_t _service, instance_id_t _instance,
         std::set<eventgroup_id_t> itsEventGroups;
         itsEventGroups.insert(_eventGroup);
 
-        application_->request_event(_service, _instance,
-                _event, itsEventGroups, _isField);
+        application_->request_event(_service, _instance, _event, itsEventGroups);
     }
 }
 
@@ -1162,11 +1157,12 @@ void Connection::registerSubsciptionHandler(const Address &_address,
         auto self = shared_from_this();
         auto itsAsyncSubscriptionHandler = [this, self, _address, _eventgroup](
             client_id_t _client,
+            uid_t _uid,
+            gid_t _gid,
             bool _subscribe,
             std::function<void(const bool)> _accepted_cb) {
-
             // hooks must be called by the mainloop
-            proxyPushFunctionToMainLoop([this, _client, _subscribe, _accepted_cb, _address, _eventgroup]() {
+            proxyPushFunctionToMainLoop([this, _client, _subscribe, _accepted_cb, _address, _eventgroup, _uid, _gid]() {
                 SubsciptionHandler_t itsHandler;
                 {
                     std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
@@ -1182,7 +1178,7 @@ void Connection::registerSubsciptionHandler(const Address &_address,
                     }
                 }
                 if(itsHandler) {
-                    _accepted_cb(itsHandler(_client, _subscribe));
+                    _accepted_cb(itsHandler(_client, _uid, _gid, _subscribe));
                 } else {
                     _accepted_cb(true);
                 }

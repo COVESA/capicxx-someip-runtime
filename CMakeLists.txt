@@ -124,14 +124,14 @@ message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 find_package( Boost 1.54 COMPONENTS system thread log REQUIRED )
 include_directories( ${Boost_INCLUDE_DIR} )
 
-find_package (vsomeip 2.10.0 REQUIRED)
-message(STATUS "vsomeip version: ${vsomeip_VERSION}")
+find_package (vsomeip3 3.1.7 REQUIRED)
+message(STATUS "vsomeip3 version: ${vsomeip3_VERSION}")
 
 include_directories (
     include
     ${Boost_INCLUDE_DIR}
     ${COMMONAPI_INCLUDE_DIRS}
-    ${VSOMEIP_INCLUDE_DIRS}
+    ${VSOMEIP3_INCLUDE_DIRS}
 )
 
 file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
@@ -140,7 +140,7 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip)
+target_link_libraries (CommonAPI-SomeIP CommonAPI vsomeip3)
 
 if (MSVC)
     target_link_libraries(CommonAPI-SomeIP ws2_32 Rpcrt4)
