@@ -14,6 +14,10 @@
 #else
 #include <unistd.h>
 #include <sys/eventfd.h>
+
+#ifndef EFD_SEMAPHORE
+#define EFD_SEMAPHORE 1
+#endif
 #endif
 
 #include <CommonAPI/SomeIP/Connection.hpp>
