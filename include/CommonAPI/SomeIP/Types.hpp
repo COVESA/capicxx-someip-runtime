@@ -27,6 +27,8 @@ typedef vsomeip::instance_t instance_id_t;
 typedef vsomeip::eventgroup_t eventgroup_id_t;
 typedef vsomeip::session_t session_id_t;
 typedef vsomeip::client_t client_id_t;
+typedef vsomeip::uid_t uid_t;
+typedef vsomeip::gid_t gid_t;
 
 typedef vsomeip::byte_t byte_t;
 typedef vsomeip::length_t message_length_t;
