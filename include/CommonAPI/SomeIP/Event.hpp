@@ -111,7 +111,7 @@ protected:
         proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
     }
 
-    virtual void onListenerRemoved(const Listener&) {
+    virtual void onListenerRemoved(const Listener&, const Subscription) {
 
     }
 
