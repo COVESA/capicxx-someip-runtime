@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,16 +7,21 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef INCLUDE_COMMONAPI_SOMEIP_STRINGENCODER_HPP_
-#define INCLUDE_COMMONAPI_SOMEIP_STRINGENCODER_HPP_
+#ifndef COMMONAPI_SOMEIP_STRINGENCODER_HPP_
+#define COMMONAPI_SOMEIP_STRINGENCODER_HPP_
 
 #include <CommonAPI/SomeIP/Deployment.hpp>
 #include <CommonAPI/SomeIP/Types.hpp>
 #include <vector>
 
-#if _WIN32
+#if defined(_WIN32) || defined(ANDROID)
+    #if !defined(LITTLE_ENDIAN)
     #define LITTLE_ENDIAN 1234
+    #endif
+
+    #if !defined(BIG_ENDIAN)
     #define BIG_ENDIAN 4321
+    #endif
 #endif
 
 namespace CommonAPI {
@@ -69,4 +74,4 @@ private:
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif /* INCLUDE_COMMONAPI_SOMEIP_STRINGENCODER_HPP_ */
+#endif // COMMONAPI_SOMEIP_STRINGENCODER_HPP_

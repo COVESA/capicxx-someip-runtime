@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2013-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_STUB_ADAPTER_HPP_
-#define COMMONAPI_SOMEIP_STUB_ADAPTER_HPP_
+#ifndef COMMONAPI_SOMEIP_STUBADAPTER_HPP_
+#define COMMONAPI_SOMEIP_STUBADAPTER_HPP_
 
 #include <memory>
 #include <set>
@@ -43,10 +43,14 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT StubAdapter: virtual public CommonAPI::Stu
      COMMONAPI_EXPORT bool isManagingInterface();
 
      COMMONAPI_EXPORT void registerEvent(event_id_t _event,
-             const std::set<eventgroup_id_t> &_eventGroups, bool _isField);
+             const std::set<eventgroup_id_t> &_eventGroups, event_type_e _type,
+             reliability_type_e _reliability);
      COMMONAPI_EXPORT void unregisterEvent(event_id_t _event);
 
      COMMONAPI_EXPORT virtual bool onInterfaceMessage(const Message &message) = 0;
+
+     COMMONAPI_EXPORT virtual void registerSelectiveEventHandlers() = 0;
+     COMMONAPI_EXPORT virtual void unregisterSelectiveEventHandlers() = 0;
 
 protected:
     Address someipAddress_;
@@ -57,4 +61,4 @@ protected:
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_STUB_ADAPTER_HPP_
+#endif // COMMONAPI_SOMEIP_STUBADAPTER_HPP_

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_OUTPUT_MESSAGE_STREAM_HPP_
-#define COMMONAPI_SOMEIP_OUTPUT_MESSAGE_STREAM_HPP_
+#ifndef COMMONAPI_SOMEIP_OUTPUTSTREAM_HPP_
+#define COMMONAPI_SOMEIP_OUTPUTSTREAM_HPP_
 
 #include <cstring>
 #include <iomanip>
@@ -96,6 +96,26 @@ public:
 
     COMMONAPI_EXPORT virtual OutputStream &_writeValue(const uint32_t &_value, const uint8_t &_width);
     COMMONAPI_EXPORT virtual OutputStream &_writeValueAt(const uint32_t &_value, const uint8_t &_width, const uint32_t &_position);
+
+    template<int minimum, int maximum>
+    COMMONAPI_EXPORT OutputStream &writeValue(const RangedInteger<minimum, maximum> &_value, const EmptyDeployment *) {
+        if (_value.validate()) {
+            writeValue(_value.value_, static_cast<EmptyDeployment *>(nullptr));
+        }
+        else
+            errorOccurred_ = true;
+        return (*this);
+    }
+
+    template<int minimum, int maximum>
+    COMMONAPI_EXPORT OutputStream &writeValue(const RangedInteger<minimum, maximum> &_value, const IntegerDeployment<int> *_depl) {
+        if (_value.validate()) {
+            _writeBitValue(_value.value_,(_depl ? _depl->bits_ : 32), true);
+        }
+        else
+            errorOccurred_ = true;
+        return (*this);
+    }
 
      template<typename Base_>
      COMMONAPI_EXPORT OutputStream &writeValue(const Enumeration<Base_> &_value, const EmptyDeployment *) {
@@ -434,6 +454,10 @@ public:
         // Initialize the source value
         value.typed_ = _value;
 
+	// sanity check bit count
+	if (_bits > (sizeof(Type_) << 3))
+            _bits = (sizeof(Type_) << 3);
+
         if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
         #if __BYTE_ORDER == __LITTLE_ENDIAN
             if (isLittleEndian_) {
@@ -591,6 +615,7 @@ public:
      */
     COMMONAPI_EXPORT void _writeRaw(const byte_t &_data);
     COMMONAPI_EXPORT void _writeRaw(const byte_t *_data, const size_t _size);
+    COMMONAPI_EXPORT void _writeRawFill(const byte_t _data, const size_t _size);
     COMMONAPI_EXPORT void _writeRawAt(const byte_t *_data, const size_t _size, const size_t _position);
 
     COMMONAPI_EXPORT void _writeBom(const StringDeployment *_depl);
@@ -625,4 +650,4 @@ private:
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_OUTPUT_MESSAGE_STREAM_HPP_
+#endif // COMMONAPI_SOMEIP_OUTPUTSTREAM_HPP_

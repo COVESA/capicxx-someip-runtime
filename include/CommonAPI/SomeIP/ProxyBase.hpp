@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_PROXY_BASE_HPP_
-#define COMMONAPI_SOMEIP_PROXY_BASE_HPP_
+#ifndef COMMONAPI_SOMEIP_PROXYBASE_HPP_
+#define COMMONAPI_SOMEIP_PROXYBASE_HPP_
 
 #include <functional>
 #include <memory>
@@ -49,10 +49,10 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
             event_id_t eventId,
-            bool isField,
+            event_type_e eventType,
+            reliability_type_e reliabilityType,
             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-            major_version_t major,
-            bool isSelective = false);
+            major_version_t major);
 
     COMMONAPI_EXPORT void removeEventHandler(
             service_id_t serviceId,
@@ -70,7 +70,8 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
             instance_id_t instanceId,
             event_id_t eventId,
             eventgroup_id_t eventGroupId,
-            bool isField);
+            event_type_e eventType,
+            reliability_type_e reliabilityType);
 
     COMMONAPI_EXPORT void unregisterEvent(
             service_id_t serviceId,
@@ -83,7 +84,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
              eventgroup_id_t eventGroupId,
              event_id_t eventId,
              std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-             uint32_t _tag,
+             uint32_t tag,
              major_version_t major);
 
     COMMONAPI_EXPORT std::weak_ptr<ProxyBase> getWeakPtr();
@@ -110,4 +111,4 @@ const std::shared_ptr< ProxyConnection >& ProxyBase::getConnection() const {
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_PROXY_BASE_HPP_
+#endif // COMMONAPI_SOMEIP_PROXYBASE_HPP_

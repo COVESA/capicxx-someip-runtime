@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -66,12 +66,17 @@ struct StringDeployment : CommonAPI::Deployment<> {
 };
 
 struct ByteBufferDeployment : CommonAPI::Deployment<> {
-    ByteBufferDeployment(uint32_t _byteBufferMinLength, uint32_t _byteBufferMaxLength)
+    ByteBufferDeployment(uint32_t _byteBufferMinLength, uint32_t _byteBufferMaxLength,
+              uint8_t _byteBufferLengthWidth = 4)
         : byteBufferMinLength_(_byteBufferMinLength),
-          byteBufferMaxLength_(_byteBufferMaxLength) {}
+          byteBufferMaxLength_(_byteBufferMaxLength),
+          byteBufferLengthWidth_(_byteBufferLengthWidth) {}
 
     uint32_t byteBufferMinLength_; // == 0 means unlimited
     uint32_t byteBufferMaxLength_;
+    // If byteBufferLengthWidth_ == 0, the array has byteBufferMaxLength_ elements.
+    // If byteBufferLengthWidth_ == 1, 2 or 4 bytes, byteBufferMinLength_ and byteBufferMaxLength_ are taken into account if > 0.
+    uint8_t byteBufferLengthWidth_;
 };
 
 template<typename... Types_>
@@ -121,8 +126,6 @@ struct ArrayDeployment : CommonAPI::ArrayDeployment<ElementDepl_> {
     uint32_t arrayMaxLength_;
     // If arrayLengthWidth_ == 0, the array has arrayMaxLength_ elements.
     // If arrayLengthWidth_ == 1, 2 or 4 bytes, arrayMinLength_ and arrayMaxLength_ are taken into account if > 0.
-    // If LengthWidth == 0, the array has arrayMaxLength_ elements.
-    // If LengthWidth == 1, 2 or 4 bytes, arrayMinLength_ and arrayMaxLength_ are taken into account if > 0.
     uint8_t arrayLengthWidth_;
 };
 

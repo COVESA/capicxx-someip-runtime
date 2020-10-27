@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -54,10 +54,10 @@ StubAdapter::onInterfaceMessage(const Message &) {
 
 void
 StubAdapter::registerEvent(event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups,
-        bool _isField) {
+        event_type_e _type, reliability_type_e _reliability) {
     connection_->registerEvent(
             someipAddress_.getService(), someipAddress_.getInstance(),
-            _event, _eventGroups, _isField);
+            _event, _eventGroups, _type, _reliability);
 }
 
 void

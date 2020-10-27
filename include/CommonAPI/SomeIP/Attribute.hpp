@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -184,13 +184,15 @@ public:
                         const event_id_t _eventId,
                         const method_id_t _getMethodId,
                         const bool _getReliable,
+                        const reliability_type_e _reliabilityType,
                         const bool _isLittleEndian,
                         AttributeType_Arguments... _arguments)
         : AttributeType_(_proxy, _getMethodId, _getReliable, _isLittleEndian, _arguments...),
           changedEvent_(_proxy,
                         _eventgroupId,
                         _eventId,
-                        true,
+                        CommonAPI::SomeIP::event_type_e::ET_FIELD,
+                        _reliabilityType,
                         _isLittleEndian,
                         std::make_tuple(CommonAPI::Deployable<ValueType, ValueTypeDepl>(this->depl_))) {
     }
@@ -205,6 +207,5 @@ protected:
 
 } // namespace SomeIP
 } // namespace CommonAPI
-
 
 #endif // COMMONAPI_SOMEIP_ATTRIBUTE_HPP_

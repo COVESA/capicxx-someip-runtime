@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <bitset>
+
+#include <iostream>
 
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/Version.hpp>
@@ -185,8 +187,7 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
     bitAlign();
 
     bool errorOccurred = false;
-    size_t size, terminationSize(2);
-    size_t bomSize(2);
+    size_t size, terminationSize(2), bomSize(2), stringSize(0);
     byte_t *bytes;
 
     //Determine string length
@@ -226,31 +227,32 @@ OutputStream& OutputStream::writeValue(const std::string &_value, const StringDe
         bomSize = 3;
         terminationSize = 1;
     }
-
+    stringSize = size + terminationSize + bomSize;
     //write string length
     if (_depl != nullptr) {
-        if (_depl->stringLengthWidth_ == 0
-                && _depl->stringLength_  != size + terminationSize + bomSize ) {
+        if (_depl->stringLengthWidth_ == 0) {
+
+            if (_depl->stringLength_  <  stringSize ) {
                 errorOccurred = true;
+            } else {
+                terminationSize += (_depl->stringLength_ - stringSize);
+            }
+
         } else {
-            _writeValue(uint32_t(size + terminationSize + bomSize),
+            _writeValue(uint32_t(stringSize),
                     _depl->stringLengthWidth_);
         }
     } else {
-        _writeValue(uint32_t(size + terminationSize + bomSize), 4);
+        _writeValue(uint32_t(stringSize), 4);
     }
-
 
     if(!errorOccurred) {
         // Write BOM
         _writeBom(_depl);
-
         // Write sting content
         _writeRaw(bytes, size);
-
         // Write termination
-        const byte_t termination[] = { 0x00, 0x00 };
-        _writeRaw(termination, terminationSize);
+        _writeRawFill(0x00, terminationSize);
     } else {
         COMMONAPI_ERROR("OutputStream::writeValue(string): error occurred");
     }
@@ -267,16 +269,47 @@ OutputStream& OutputStream::writeValue(const ByteBuffer &_value, const ByteBuffe
 
     uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
+    uint32_t byteBufferLengthWidth = (_depl ? _depl->byteBufferLengthWidth_ : 4);
 
-    if (_value.size() < byteBufferMinLength
-        || (byteBufferMaxLength != 0 && _value.size() > byteBufferMaxLength)) {
+    uint32_t maxSize = 0;
+    if (byteBufferLengthWidth != 0 && byteBufferMaxLength > 0 && byteBufferMaxLength < _value.size() ) {
+        maxSize = byteBufferMaxLength;
+    }
+    else {
+        maxSize = static_cast<std::uint32_t>(_value.size());
+    }
+
+    if ((byteBufferLengthWidth == 0 && byteBufferMaxLength != maxSize) ||
+        (byteBufferLengthWidth != 0 && maxSize < byteBufferMinLength)) {
         errorOccurred_ = true;
     }
 
     if (!hasError()) {
-        _writeValue(uint32_t(_value.size()), 4);
+        switch (byteBufferLengthWidth) {
+        case 0:
+            break;
+        case 1:
+            if (maxSize > 255)
+                errorOccurred_ = true;
+            else
+                _writeValue(uint8_t(maxSize), 1);
+            break;
+        case 2:
+            if (maxSize > (1U<<16) - 1)
+                errorOccurred_ = true;
+            else
+                _writeValue(uint16_t(maxSize), 2);
+            break;
+        case 4:
+            _writeValue(uint32_t(maxSize), 4);
+            break;
+        default:
+            errorOccurred_ = true;
+        }
+    }
+    if (!hasError()) {
         if (_value.size()) {
-            _writeRaw(static_cast<const byte_t *>(&_value[0]), _value.size());
+            _writeRaw(static_cast<const byte_t *>(&_value[0]), maxSize);
         }
     }
 
@@ -317,6 +350,10 @@ void OutputStream::_writeRaw(const byte_t &_data) {
 
 void OutputStream::_writeRaw(const byte_t *_data, const size_t _size) {
     payload_.insert(payload_.end(), _data, _data + _size);
+}
+
+void OutputStream::_writeRawFill(const byte_t _data, const size_t _size) {
+    payload_.insert(payload_.end(), _size, _data);
 }
 
 void OutputStream::_writeRawAt(const byte_t *_data, const size_t _size, const size_t _position) {

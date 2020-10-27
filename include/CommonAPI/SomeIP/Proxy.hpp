@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -46,7 +46,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT Proxy
           public std::enable_shared_from_this<Proxy> {
 public:
     COMMONAPI_EXPORT Proxy(const Address &_address,
-          const std::shared_ptr<ProxyConnection> &_connection, bool hasSelective = false);
+          const std::shared_ptr<ProxyConnection> &_connection);
     COMMONAPI_EXPORT virtual ~Proxy();
 
     COMMONAPI_EXPORT bool init();
@@ -93,8 +93,6 @@ private:
 
     mutable std::mutex availabilityMutex_;
     mutable std::condition_variable availabilityCondition_;
-
-    bool hasSelectiveEvents_;
 
     mutable std::shared_ptr<std::thread> availabilityTimeoutThread_;
     mutable std::mutex availabilityTimeoutThreadMutex_;

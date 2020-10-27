@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -28,7 +28,8 @@ public:
     Event(ProxyBase &_proxy,
           const eventgroup_id_t _eventgroupId,
           const event_id_t _eventId,
-          const bool _isField,
+          const event_type_e _eventType,
+          const reliability_type_e _reliabilityType,
           const bool _isLittleEndian,
           std::tuple<Arguments_...> _arguments)
         : proxy_(_proxy),
@@ -37,10 +38,12 @@ public:
           instanceId_(_proxy.getSomeIpAlias().getInstance()),
           eventId_(_eventId),
           eventgroupId_(_eventgroupId),
-          isField_(_isField),
+          eventType_(_eventType),
+          reliabilityType_(_reliabilityType),
           isLittleEndian_(_isLittleEndian),
           arguments_(_arguments) {
-        proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_, isField_);
+        proxy_.registerEvent(serviceId_, instanceId_, eventId_, eventgroupId_,
+                eventType_, reliabilityType_);
     }
 
     virtual ~Event() {
@@ -90,7 +93,8 @@ protected:
             handler_ = std::make_shared<Handler>(proxy_, this);
         }
         auto major = proxy_.getSomeIpAlias().getMajorVersion();
-        proxy_.addEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, isField_, handler_, major);
+        proxy_.addEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_,
+                eventType_, reliabilityType_, handler_, major);
     }
 
     virtual void onListenerAdded(const Listener &_listener, const Subscription _subscription) {
@@ -115,14 +119,14 @@ protected:
 
     }
 
-    template<int ... Indices_>
+    template <size_t ... Indices_>
     inline void handleEventMessage(const Message &_message,
                                    index_sequence<Indices_...>) {
 
         InputStream InputStream(_message, isLittleEndian_);
         if (SerializableArguments<Arguments_...>::deserialize(
                 InputStream, std::get<Indices_>(arguments_)...)) {
-            if(_message.isInitialValue()) {
+            if (_message.isInitialValue()) {
                 std::set<Subscription> subscribers;
                 {
                     std::lock_guard<std::mutex> itsLock(listeners_mutex_);
@@ -159,7 +163,8 @@ protected:
     const instance_id_t instanceId_;
     const event_id_t eventId_;
     const eventgroup_id_t eventgroupId_;
-    const bool isField_;
+    const event_type_e eventType_;
+    const reliability_type_e reliabilityType_;
     const bool isLittleEndian_;
     std::tuple<Arguments_...> arguments_;
     std::mutex listeners_mutex_;
@@ -170,4 +175,3 @@ protected:
 } // namespace CommonAPI
 
 #endif // COMMONAPI_SOMEIP_EVENT_HPP_
-

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_STUB_ADAPTER_HELPER_HPP_
-#define COMMONAPI_SOMEIP_STUB_ADAPTER_HELPER_HPP_
+#ifndef COMMONAPI_SOMEIP_STUBADAPTERHELPER_HPP_
+#define COMMONAPI_SOMEIP_STUBADAPTERHELPER_HPP_
 
 #include <initializer_list>
 #include <memory>
@@ -37,7 +37,7 @@ public:
     virtual ~StubDispatcher() {}
     virtual bool dispatchMessage(const Message &_message,
                                  const std::shared_ptr<StubClass_> &_stub,
-                                 RemoteEventHandlerType* _remoteEventHandler,
+                                 RemoteEventHandlerType *_remoteEventHandler,
                                  std::shared_ptr<ProxyConnection> _connection) = 0;
 };
 
@@ -139,15 +139,15 @@ class StubAdapterHelper<StubClass_, Stubs_...>:
     }
 
     bool findDispatcherAndHandle(const Message &message, const method_id_t &methodId) {
-
         auto findIterator = stubDispatcherTable_.find(methodId);
         const bool foundInterfaceMemberHandler = (findIterator != stubDispatcherTable_.end());
         bool isMessageHandled = false;
-        //To prevent the destruction of the stub whilst still handling a message
+
+        // To prevent the destruction of the stub while still handling a message
         if (stub_ && foundInterfaceMemberHandler) {
             StubDispatcher<StubClass_> *stubDispatcher = findIterator->second;
             isMessageHandled = stubDispatcher->dispatchMessage(message, stub_, getRemoteEventHandler(), getConnection());
-            if( !isMessageHandled) {
+            if (!isMessageHandled) {
                 if (message.isRequestType()) {
                     auto error = message.createErrorResponseMessage(return_code_e::E_MALFORMED_MESSAGE);
                     connection_->sendMessage(error);
@@ -225,8 +225,10 @@ struct StubEventHelper<In_<InArgs_...>> {
         if (sizeof...(InArgs_) > 0) {
             OutputStream output(message, _isLittleEndian);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
-                COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper: serialization failed!");
-
+                COMMONAPI_ERROR("StubEventHelper (someip): serialization failed! [",
+                        message.getServiceId(), ".",
+                        message.getInstanceId(), ".",
+                        message.getMethodId());
                 return false;
             }
             output.flush();
@@ -259,7 +261,10 @@ struct StubEventHelper<In_<InArgs_...>> {
         if (sizeof...(InArgs_) > 0) {
             OutputStream output(message, _isLittleEndian);
             if (!SerializableArguments<InArgs_...>::serialize(output, _in...)) {
-                COMMONAPI_ERROR("CommonAPI::SomeIP::StubEventHelper 2: serialization failed!");
+                COMMONAPI_ERROR("StubEventHelper (someip) 2: serialization failed! [",
+                        message.getServiceId(), ".",
+                        message.getInstanceId(), ".",
+                        message.getMethodId());
                 return false;
             }
             output.flush();
@@ -282,28 +287,31 @@ public:
     typedef void (StubClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_...);
 
     MethodStubDispatcher(
-        StubFunctor_ stubFunctor, bool _isLittleEndian, std::tuple<DeplInArgs_*...> _in)
-        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian) {
+        StubFunctor_ stubFunctor, const bool _isLittleEndian, const bool _isImplemented, std::tuple<DeplInArgs_*...> _in)
+        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian), isImplemented_(_isImplemented) {
 
         initialize(typename make_sequence_range<sizeof...(DeplInArgs_), 0>::type(), _in);
     }
 
     bool dispatchMessage(const Message &_message,
                          const std::shared_ptr<StubClass_> &_stub,
-                         RemoteEventHandlerType* _remoteEventHandler,
+                         RemoteEventHandlerType *_remoteEventHandler,
                          std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
+
         return dispatchMessageHelper(
                     _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type());
     }
 
 private:
-    template <int... DeplInArgIndices_>
+    template <size_t... DeplInArgIndices_>
     inline void initialize(index_sequence<DeplInArgIndices_...>, std::tuple<DeplInArgs_*...> &_in) {
         in_ = std::make_tuple(std::get<DeplInArgIndices_>(_in)...);
     }
 
-    template <int... InArgIndices_>
+    template <size_t... InArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                         const std::shared_ptr<StubClass_> &_stub,
                                         RemoteEventHandlerType* _remoteEventHandler,
@@ -316,12 +324,18 @@ private:
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(in)...))
+                    inputStream, std::get<InArgIndices_>(in)...)) {
+                COMMONAPI_ERROR("MethodStubDispatcher (someip): deserialization failed! [",
+                        _message.getServiceId(), ".",
+                        _message.getInstanceId(), ".",
+                        _message.getMethodId(), ".",
+                        _message.getSessionId(), "]");
                 return false;
+            }
         }
 
         std::shared_ptr<ClientId> client
-            = std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId(), _message.getUid(), _message.getGid());
 
         (_stub.get()->*stubFunctor_)(
             client,
@@ -332,7 +346,8 @@ private:
     }
 
     StubFunctor_ stubFunctor_;
-    bool isLittleEndian_;
+    const bool isLittleEndian_;
+    const bool isImplemented_;
 
     std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
 };
@@ -361,9 +376,11 @@ public:
 
     MethodWithReplyStubDispatcher(StubFunctor_ _stubFunctor,
                                   const bool _isLittleEndian,
+                                  const bool _isImplemented,
                                   const std::tuple<DeplInArgs_*...> _in,
                                   const std::tuple<DeplOutArgs_*...> _out) :
                                       isLittleEndian_(_isLittleEndian),
+                                      isImplemented_(_isImplemented),
                                       out_(_out),
                                       currentCall_(0),
                                       stubFunctor_(_stubFunctor) {
@@ -374,6 +391,9 @@ public:
                          const std::shared_ptr<StubClass_> &_stub,
                          RemoteEventHandlerType* _remoteEventHandler,
                          std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
+
         return dispatchMessageHelper(
                     _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
@@ -397,8 +417,8 @@ public:
     }
 
 protected:
-
-    bool isLittleEndian_;
+    const bool isLittleEndian_;
+    const bool isImplemented_;
 
     std::tuple<CommonAPI::Deployable<InArgs_, DeplInArgs_>...> in_;
     std::tuple<DeplOutArgs_*...> out_;
@@ -408,15 +428,15 @@ protected:
     std::mutex mutex_; // protects pending_
 
 private:
-    template <int... DeplInArgIndices_>
+    template <size_t... DeplInArgIndices_>
     inline void initialize(index_sequence<DeplInArgIndices_...>, const std::tuple<DeplInArgs_*...> &_in) {
         in_ = std::make_tuple(std::get<DeplInArgIndices_>(_in)...);
     }
 
-    template <int... InArgIndices_, int... OutArgIndices_>
+    template <size_t... InArgIndices_, size_t... OutArgIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                       const std::shared_ptr<StubClass_> &_stub,
-                                      RemoteEventHandlerType* _remoteEventHandler,
+                                      RemoteEventHandlerType *_remoteEventHandler,
                                       std::shared_ptr<ProxyConnection> _connection,
                                       index_sequence<InArgIndices_...>,
                                       index_sequence<OutArgIndices_...>) {
@@ -432,12 +452,18 @@ private:
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(in)...))
+                    inputStream, std::get<InArgIndices_>(in)...)) {
+                COMMONAPI_ERROR("MethodWithReplyStubDispatcher (someip): deserialization failed! [",
+                        _message.getServiceId(), ".",
+                        _message.getInstanceId(), ".",
+                        _message.getMethodId(), ".",
+                        _message.getSessionId(), "]");
                 return false;
+            }
         }
 
         std::shared_ptr<ClientId> client
-            = std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId(), _message.getUid(), _message.getGid());
 
         CommonAPI::CallId_t call;
         {
@@ -470,11 +496,11 @@ private:
         return true;
     }
 
-    template<int... OutArgIndices_>
+    template<size_t... OutArgIndices_>
     bool sendReplyMessageHelper(const CommonAPI::CallId_t _call,
                                 const std::weak_ptr<ProxyConnection> &_connection,
                                 index_sequence<OutArgIndices_...>,
-                                const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>& _args) {
+                                const std::tuple<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...> &_args) {
         (void)_args;
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -484,6 +510,11 @@ private:
                 OutputStream output(reply->second, isLittleEndian_);
                 if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
                         output, std::get<OutArgIndices_>(_args)...)) {
+                    COMMONAPI_ERROR("MethodWithReplyStubDispatcher (someip): "
+                            "serialization failed! [",
+                            reply->second.getServiceId(), ".",
+                            reply->second.getInstanceId(), ".",
+                            reply->second.getMethodId(), "]");
                     pending_.erase(_call);
                     return false;
                 }
@@ -530,6 +561,7 @@ public:
 
     MethodWithReplyStubDispatcher(StubFunctor_ _stubFunctor,
                                   const bool _isLittleEndian,
+                                  const bool _isImplemented,
                                   const std::tuple<DeplInArgs_*...> _in,
                                   const std::tuple<DeplOutArgs_*...> _out,
                                   const ErrorReplies_... _errorReplies) :
@@ -541,6 +573,7 @@ public:
                                                     DeplOut_<DeplOutArgs_...>>(
                                                             NULL,
                                                             _isLittleEndian,
+                                                            _isImplemented,
                                                             _in,
                                                             _out),
                                       stubFunctor_(_stubFunctor),
@@ -550,6 +583,9 @@ public:
                          const std::shared_ptr<StubClass_> &_stub,
                          RemoteEventHandlerType* _remoteEventHandler,
                          std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
+
         return dispatchMessageHelper(
                     _message, _stub, _remoteEventHandler, _connection,
                     typename make_sequence_range<sizeof...(InArgs_), 0>::type(),
@@ -578,7 +614,7 @@ public:
 
 private:
 
-    template <int... InArgIndices_, int... OutArgIndices_, int... ErrorRepliesIndices_>
+    template <size_t... InArgIndices_, size_t... OutArgIndices_, size_t... ErrorRepliesIndices_>
     inline bool dispatchMessageHelper(const Message &_message,
                                       const std::shared_ptr<StubClass_> &_stub,
                                       RemoteEventHandlerType* _remoteEventHandler,
@@ -598,12 +634,19 @@ private:
         if (sizeof...(DeplInArgs_) > 0) {
             InputStream inputStream(_message, this->isLittleEndian_);
             if (!SerializableArguments<CommonAPI::Deployable<InArgs_, DeplInArgs_>...>::deserialize(
-                    inputStream, std::get<InArgIndices_>(in)...))
+                    inputStream, std::get<InArgIndices_>(in)...)) {
+                COMMONAPI_ERROR("MethodWithReplyStubDispatcher w/ error replies"
+                        " (someip): deserialization failed! [",
+                        _message.getServiceId(), ".",
+                        _message.getInstanceId(), ".",
+                        _message.getMethodId(), ".",
+                        _message.getSessionId(), "]");
                 return false;
+            }
         }
 
         std::shared_ptr<ClientId> client
-            = std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId(), _message.getUid(), _message.getGid());
 
         CommonAPI::CallId_t call;
         {
@@ -638,7 +681,7 @@ private:
         return true;
     }
 
-    template<int... OutArgIndices_>
+    template<size_t... OutArgIndices_>
     bool sendErrorReplyMessageHelper(const CommonAPI::CallId_t _call,
                                      const std::weak_ptr<ProxyConnection> &_connection,
                                      index_sequence<OutArgIndices_...>,
@@ -652,6 +695,11 @@ private:
                 OutputStream output(reply->second, this->isLittleEndian_);
                 if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
                         output, std::get<OutArgIndices_>(_args)...)) {
+                    COMMONAPI_ERROR("MethodWithReplyStubDispatcher w/ error replies"
+                            "(someip): serialization failed! [",
+                            reply.getServiceId(), ".",
+                            reply.getInstanceId(), ".",
+                            reply.getMethodId(), "]");
                     this->pending_.erase(_call);
                     return false;
                 }
@@ -688,14 +736,16 @@ public:
     typedef void (StubAdapterClass_::*StubFunctor_)(std::shared_ptr<CommonAPI::ClientId>, InArgs_..., OutArgs_&...);
     typedef typename CommonAPI::Stub<typename StubClass_::StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
-    MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor, bool _isLittleEndian)
-        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian) {
+    MethodWithReplyAdapterDispatcher(StubFunctor_ stubFunctor, const bool _isLittleEndian, const bool _isImplemented)
+        : stubFunctor_(stubFunctor), isLittleEndian_(_isLittleEndian), isImplemented_(_isImplemented) {
     }
 
     bool dispatchMessage(const Message &_message,
       const std::shared_ptr<StubClass_> &_stub,
       RemoteEventHandlerType* _remoteEventHandler,
       std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
 
         std::tuple<InArgs_..., OutArgs_...> argTuple;
         return dispatchMessageHelper(
@@ -708,7 +758,7 @@ public:
     }
 
  private:
-    template <int... InArgIndices_, int... OutArgIndices_>
+    template <size_t... InArgIndices_, size_t... OutArgIndices_>
     inline bool dispatchMessageHelper(
                         const Message &_message,
                         const std::shared_ptr<StubClass_> &_stub,
@@ -726,20 +776,33 @@ public:
 
        if (sizeof...(InArgs_) > 0) {
             InputStream inputStream(_message, isLittleEndian_);
-            if (!SerializableArguments<InArgs_...>::deserialize(inputStream, std::get<InArgIndices_>(_argTuple)...))
+            if (!SerializableArguments<InArgs_...>::deserialize(inputStream, std::get<InArgIndices_>(_argTuple)...)) {
+                COMMONAPI_ERROR("MethodWithReplyAdapterDispatcher (someip)"
+                        " deserialization failed! [",
+                        _message.getServiceId(), ".",
+                        _message.getInstanceId(), ".",
+                        _message.getMethodId(), ".",
+                        _message.getSessionId(), "]");
                 return false;
+            }
         }
 
         std::shared_ptr<ClientId> client
-            = std::make_shared<ClientId>(_message.getClientId());
+            = std::make_shared<ClientId>(_message.getClientId(), _message.getUid(), _message.getGid());
 
         (_stub->StubType::getStubAdapter().get()->*stubFunctor_)(client, std::move(std::get<InArgIndices_>(_argTuple))..., std::get<OutArgIndices_>(_argTuple)...);
         Message reply = _message.createResponseMessage();
 
         if (sizeof...(OutArgs_) > 0) {
            OutputStream outputStream(reply, isLittleEndian_);
-            if (!SerializableArguments<OutArgs_...>::serialize(outputStream, std::get<OutArgIndices_>(_argTuple)...))
+            if (!SerializableArguments<OutArgs_...>::serialize(outputStream, std::get<OutArgIndices_>(_argTuple)...)) {
+                COMMONAPI_ERROR("MethodWithReplyAdapterDispatcher (someip) "
+                        " serialization failed! [",
+                        reply.getServiceId(), ".",
+                        reply.getInstanceId(), ".",
+                        reply.getMethodId(), "]");
                 return false;
+            }
 
             outputStream.flush();
        }
@@ -748,26 +811,34 @@ public:
     }
 
     StubFunctor_ stubFunctor_;
-    bool isLittleEndian_;
+    const bool isLittleEndian_;
+    const bool isImplemented_;
 };
 
 
 template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
 class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
- public:
+public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef void (StubClass_::*LockStubFunctor)(bool);
     typedef const AttributeType_& (StubClass_::*GetStubFunctor)(std::shared_ptr<CommonAPI::ClientId>);
     typedef typename StubClass_::StubAdapterType StubAdapterType;
     typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
 
-    GetAttributeStubDispatcher(LockStubFunctor _lockStubFunctor, GetStubFunctor getStubFunctor, bool _isLittleEndian, AttributeDepl_ *_depl = nullptr)
-        : lockStubFunctor_(_lockStubFunctor), getStubFunctor_(getStubFunctor), isLittleEndian_(_isLittleEndian), depl_(_depl) {
+    GetAttributeStubDispatcher(LockStubFunctor _lockStubFunctor, GetStubFunctor _getStubFunctor,
+            const bool _isLittleEndian, const bool _isImplemented,
+            AttributeDepl_ *_depl = nullptr)
+        : lockStubFunctor_(_lockStubFunctor), getStubFunctor_(_getStubFunctor),
+          isLittleEndian_(_isLittleEndian), isImplemented_(_isImplemented),
+          depl_(_depl) {
     }
 
     bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
       RemoteEventHandlerType* _remoteEventHandler,
       std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
+
         (void) _remoteEventHandler;
         return sendAttributeValueReply(message, stub, _connection);
     }
@@ -779,7 +850,8 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
         Message reply = message.createResponseMessage();
         OutputStream outputStream(reply, isLittleEndian_);
 
-        std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
+        std::shared_ptr<ClientId> clientId
+            = std::make_shared<ClientId>(message.getClientId(), message.getUid(), message.getGid());
 
         (stub.get()->*lockStubFunctor_)(true);
         auto deployable = CommonAPI::Deployable<AttributeType_, AttributeDepl_>((stub.get()->*getStubFunctor_)(clientId), depl_);
@@ -793,7 +865,8 @@ class GetAttributeStubDispatcher: public StubDispatcher<StubClass_> {
 
     LockStubFunctor lockStubFunctor_;
     GetStubFunctor getStubFunctor_;
-    bool isLittleEndian_;
+    const bool isLittleEndian_;
+    const bool isImplemented_;
     AttributeDepl_ *depl_;
 };
 
@@ -808,22 +881,22 @@ public:
     typedef bool (RemoteEventHandlerType::*OnRemoteSetFunctor)(std::shared_ptr<CommonAPI::ClientId>, AttributeType_);
     typedef void (RemoteEventHandlerType::*OnRemoteChangedFunctor)();
 
-    SetAttributeStubDispatcher(LockStubFunctor lockStubFunctor,
-                               GetStubFunctor getStubFunctor,
-                               OnRemoteSetFunctor onRemoteSetFunctor,
-                               OnRemoteChangedFunctor onRemoteChangedFunctor,
-                               bool _isLittleEndian,
-                               AttributeDepl_ *_depl = nullptr)
-        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(lockStubFunctor, getStubFunctor, _isLittleEndian, _depl),
-          onRemoteSetFunctor_(onRemoteSetFunctor),
-          onRemoteChangedFunctor_(onRemoteChangedFunctor) {
+    SetAttributeStubDispatcher(LockStubFunctor _lockStubFunctor, GetStubFunctor _getStubFunctor,
+            OnRemoteSetFunctor _onRemoteSetFunctor, OnRemoteChangedFunctor _onRemoteChangedFunctor,
+            bool _isLittleEndian, bool _isImplemented,
+            AttributeDepl_ *_depl = nullptr)
+        : GetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(
+          _lockStubFunctor, _getStubFunctor, _isLittleEndian, _isImplemented, _depl),
+          onRemoteSetFunctor_(_onRemoteSetFunctor),
+          onRemoteChangedFunctor_(_onRemoteChangedFunctor) {
     }
 
     bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
-      RemoteEventHandlerType* _remoteEventHandler,
-      std::shared_ptr<ProxyConnection> _connection) {
-        bool attributeValueChanged;
+            RemoteEventHandlerType* _remoteEventHandler, std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
 
+        bool attributeValueChanged;
         if (!setAttributeValue(message, stub, _remoteEventHandler, _connection, attributeValueChanged)) {
             return false;
         }
@@ -837,18 +910,25 @@ public:
 
  protected:
     inline bool setAttributeValue(const Message &message,
-                                  const std::shared_ptr<StubClass_>& stub,
-                                  RemoteEventHandlerType* _remoteEventHandler,
-                                  std::shared_ptr<ProxyConnection> _connection,
-                                  bool& attributeValueChanged) {
+            const std::shared_ptr<StubClass_>& stub,
+            RemoteEventHandlerType* _remoteEventHandler,
+            std::shared_ptr<ProxyConnection> _connection,
+            bool &attributeValueChanged) {
         InputStream inputStream(message, this->isLittleEndian_);
         CommonAPI::Deployable<AttributeType_, AttributeDepl_> attributeValue(this->depl_);
         inputStream >> attributeValue;
         if (inputStream.hasError()) {
+            COMMONAPI_ERROR("CommonAPI::SomeIP::SetAttributeStubDispatcher"
+                    " deserialization failed! [",
+                    message.getServiceId(), ".",
+                    message.getInstanceId(), ".",
+                    message.getMethodId(), ".",
+                    message.getSessionId(), "]");
             return false;
         }
 
-        std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
+        std::shared_ptr<ClientId> clientId
+            = std::make_shared<ClientId>(message.getClientId(), message.getUid(), message.getGid());
 
         attributeValueChanged = (_remoteEventHandler->*onRemoteSetFunctor_)(clientId, std::move(attributeValue.getValue()));
 
@@ -870,7 +950,7 @@ public:
 
 template <typename StubClass_, typename AttributeType_, typename AttributeDepl_ = EmptyDeployment>
 class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_> {
- public:
+public:
     typedef typename StubClass_::RemoteEventHandlerType RemoteEventHandlerType;
     typedef typename StubClass_::StubAdapterType StubAdapterType;
 
@@ -879,34 +959,35 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteSetFunctor OnRemoteSetFunctor;
     typedef typename SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>::OnRemoteChangedFunctor OnRemoteChangedFunctor;
     typedef typename CommonAPI::Stub<StubAdapterType, typename StubClass_::RemoteEventType> StubType;
-    typedef void (StubAdapterType::*FireChangedFunctor)(const AttributeType_&);
+    typedef void (StubAdapterType::*FireChangedFunctor)(const AttributeType_ &);
 
-    SetObservableAttributeStubDispatcher(LockStubFunctor lockStubFunctor,
-                                         GetStubFunctor getStubFunctor,
-                                         OnRemoteSetFunctor onRemoteSetFunctor,
-                                         OnRemoteChangedFunctor onRemoteChangedFunctor,
-                                         FireChangedFunctor fireChangedFunctor,
-                                         bool _isLittleEndian,
-                                         AttributeDepl_ *_depl = nullptr)
-        : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(lockStubFunctor,
-                                                                 getStubFunctor,
-                                                                 onRemoteSetFunctor,
-                                                                 onRemoteChangedFunctor,
-                                                                 _isLittleEndian,
-                                                                 _depl),
-                    fireChangedFunctor_(fireChangedFunctor) {
+    SetObservableAttributeStubDispatcher(LockStubFunctor _lockStubFunctor, GetStubFunctor _getStubFunctor,
+            OnRemoteSetFunctor _onRemoteSetFunctor, OnRemoteChangedFunctor _onRemoteChangedFunctor,
+            FireChangedFunctor _fireChangedFunctor,
+            bool _isLittleEndian, bool _isImplemented,
+            AttributeDepl_ *_depl = nullptr)
+        : SetAttributeStubDispatcher<StubClass_, AttributeType_, AttributeDepl_>(
+                _lockStubFunctor, _getStubFunctor,
+                _onRemoteSetFunctor, _onRemoteChangedFunctor,
+                _isLittleEndian, _isImplemented,
+                _depl),
+          fireChangedFunctor_(_fireChangedFunctor) {
     }
 
     bool dispatchMessage(const Message &message, const std::shared_ptr<StubClass_> &stub,
       RemoteEventHandlerType* _remoteEventHandler,
       std::shared_ptr<ProxyConnection> _connection) {
+        if (!this->isImplemented_)
+            return false;
+
         bool attributeValueChanged;
         if (!this->setAttributeValue(message, stub, _remoteEventHandler, _connection, attributeValueChanged)) {
             return false;
         }
 
         if (attributeValueChanged) {
-            std::shared_ptr<ClientId> clientId = std::make_shared<ClientId>(message.getClientId());
+            std::shared_ptr<ClientId> clientId
+                = std::make_shared<ClientId>(message.getClientId(), message.getUid(), message.getGid());
             fireAttributeValueChanged(clientId,  stub);
             this->notifyOnRemoteChanged(_remoteEventHandler);
         }
@@ -927,4 +1008,4 @@ class SetObservableAttributeStubDispatcher: public SetAttributeStubDispatcher<St
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_STUB_ADAPTER_HELPER_HPP_
+#endif // COMMONAPI_SOMEIP_STUBADAPTERHELPER_HPP_

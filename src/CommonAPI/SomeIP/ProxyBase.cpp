@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -27,10 +27,10 @@ void ProxyBase::addEventHandler(
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
         event_id_t eventId,
-        bool isField,
+        event_type_e eventType,
+        reliability_type_e reliabilityType,
         std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-        major_version_t major,
-        bool _isSelective) {
+        major_version_t major) {
     event_id_t itsEventId = AddressTranslator::get()->getMethodAlias(getSomeIpAddress(), eventId);
     {
         std::lock_guard<std::mutex> itsLock(eventHandlerAddedMutex_);
@@ -38,8 +38,9 @@ void ProxyBase::addEventHandler(
     }
     eventgroup_id_t itsEventGroupId = AddressTranslator::get()->getEventgroupAlias(getSomeIpAddress(), eventGroupId);
     connection_->addEventHandler(serviceId, instanceId, itsEventGroupId, itsEventId,
-            eventHandler, major, isField, _isSelective);
-    connection_->requestEvent(serviceId, instanceId, itsEventId, itsEventGroupId, isField);
+            eventHandler, major, eventType);
+    connection_->requestEvent(serviceId, instanceId, itsEventId, itsEventGroupId,
+            eventType, reliabilityType);
 }
 
 void ProxyBase::removeEventHandler(
@@ -71,10 +72,12 @@ void ProxyBase::registerEvent(
             instance_id_t instanceId,
             event_id_t eventId,
             eventgroup_id_t eventGroupId,
-            bool isField) {
+            event_type_e eventType,
+            reliability_type_e reliabilityType) {
     event_id_t itsEventId = AddressTranslator::get()->getMethodAlias(getSomeIpAddress(), eventId);
     eventgroup_id_t itsEventGroupId = AddressTranslator::get()->getEventgroupAlias(getSomeIpAddress(), eventGroupId);
-    connection_->requestEvent(serviceId, instanceId, itsEventId, itsEventGroupId, isField);
+    connection_->requestEvent(serviceId, instanceId, itsEventId,
+            itsEventGroupId, eventType, reliabilityType);
 }
 
 void ProxyBase::unregisterEvent(
@@ -91,12 +94,12 @@ void ProxyBase::subscribe(
              eventgroup_id_t eventGroupId,
              event_id_t eventId,
              std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
-             uint32_t _tag,
+             uint32_t tag,
              major_version_t major) {
     event_id_t itsEventId = AddressTranslator::get()->getMethodAlias(getSomeIpAddress(), eventId);
     eventgroup_id_t itsEventGroupId = AddressTranslator::get()->getEventgroupAlias(getSomeIpAddress(), eventGroupId);
     connection_->subscribe(serviceId, instanceId, itsEventGroupId, itsEventId,
-            eventHandler, _tag, major);
+            eventHandler, tag, major);
 }
 
 std::weak_ptr<ProxyBase> ProxyBase::getWeakPtr() {

@@ -1,10 +1,10 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef INCLUDE_COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_
-#define INCLUDE_COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_
+#ifndef COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_
+#define COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_
 
 #include <queue>
 #include <utility>
@@ -62,4 +62,4 @@ class SubscriptionStatusWrapper {
 
 }
 }
-#endif /* INCLUDE_COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_ */
+#endif // COMMONAPI_SOMEIP_SUBSCRIPTIONSTATUSWRAPPER_HPP_

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.h> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_PROXY_CONNECTION_HPP_
-#define COMMONAPI_SOMEIP_PROXY_CONNECTION_HPP_
+#ifndef COMMONAPI_SOMEIP_PROXYCONNECTION_HPP_
+#define COMMONAPI_SOMEIP_PROXYCONNECTION_HPP_
 
 #include <cstdint>
 #include <functional>
@@ -84,8 +84,7 @@ class ProxyConnection {
             event_id_t eventId,
             std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
             major_version_t major,
-            bool isField,
-            bool isSelective = false) = 0;
+            event_type_e eventType) = 0;
 
     virtual void removeEventHandler(
             service_id_t serviceId,
@@ -104,26 +103,28 @@ class ProxyConnection {
     virtual void unregisterAvailabilityHandler(
             const Address &_address, AvailabilityHandlerId_t _handlerId) = 0;
 
-    virtual void registerSubsciptionHandler(const Address &_address,
-            const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) = 0;
+    virtual void registerSubscriptionHandler(const Address &_address,
+            const eventgroup_id_t _eventgroup, AsyncSubscriptionHandler_t _handler) = 0;
 
-    virtual void unregisterSubsciptionHandler(const Address &_address,
+    virtual void unregisterSubscriptionHandler(const Address &_address,
             const eventgroup_id_t _eventgroup) = 0;
 
     virtual void registerService(const Address &_address) = 0;
     virtual void unregisterService(const Address &_address) = 0;
 
-    virtual void requestService(const Address &_address, bool _hasSelective = false) = 0;
+    virtual void requestService(const Address &_address) = 0;
 
     virtual void releaseService(const Address &_address) = 0;
 
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) = 0;
+            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups,
+            event_type_e _type, reliability_type_e _reliability) = 0;
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event) = 0;
 
     virtual void requestEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) = 0;
+            event_id_t _event, eventgroup_id_t _eventGroup, event_type_e _type,
+            reliability_type_e _reliability) = 0;
     virtual void releaseEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event) = 0;
 
@@ -160,4 +161,4 @@ class ProxyConnection {
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif //COMMONAPI_SOMEIP_PROXY_CONNECTION_HPP_
+#endif //COMMONAPI_SOMEIP_PROXYCONNECTION_HPP_

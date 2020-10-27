@@ -8,6 +8,6 @@ Description: C++ CommonAPI SOME/IP Runtime
 Version: @COMPONENT_VERSION@
 Libs: -L${libdir} -lCommonAPI-SomeIP
 Requires: CommonAPI
-Requires.private: vsomeip
+Requires.private: vsomeip3
 Cflags: -I${includedir}/CommonAPI-@COMMONAPI_API_HEADER_VERSION@
 

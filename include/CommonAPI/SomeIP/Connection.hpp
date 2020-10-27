@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -13,6 +13,7 @@
 #include <map>
 #include <set>
 #include <atomic>
+#include <condition_variable>
 
 #include <vsomeip/application.hpp>
 
@@ -151,7 +152,7 @@ public:
     void addEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
             std::weak_ptr<ProxyConnection::EventHandler> eventHandler, major_version_t major,
-            bool isField, bool isSelective);
+            event_type_e eventType);
 
     void removeEventHandler(service_id_t serviceId, instance_id_t instanceId,
             eventgroup_id_t eventGroupId, event_id_t eventId,
@@ -167,26 +168,27 @@ public:
     virtual void unregisterAvailabilityHandler(const Address &_address,
             AvailabilityHandlerId_t _handlerId);
 
-    virtual void registerSubsciptionHandler(const Address &_address,
-            const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler);
-    virtual void unregisterSubsciptionHandler(const Address &_address,
+    virtual void registerSubscriptionHandler(const Address &_address,
+            const eventgroup_id_t _eventgroup, AsyncSubscriptionHandler_t _handler);
+    virtual void unregisterSubscriptionHandler(const Address &_address,
             const eventgroup_id_t _eventgroup);
 
     virtual void registerService(const Address &_address);
     virtual void unregisterService(const Address &_addess);
 
-    virtual void requestService(const Address &_address, bool _hasSelective =
-            false);
+    virtual void requestService(const Address &_address);
 
     virtual void releaseService(const Address &_address);
 
     virtual void registerEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField);
+            event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups,
+            event_type_e _type, reliability_type_e _reliability);
     virtual void unregisterEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event);
 
     virtual void requestEvent(service_id_t _service, instance_id_t _instance,
-            event_id_t _event, eventgroup_id_t _eventGroup, bool _isField);
+            event_id_t _event, eventgroup_id_t _eventGroup, event_type_e _type,
+            reliability_type_e _reliability);
     virtual void releaseEvent(service_id_t _service, instance_id_t _instance,
             event_id_t _event);
 
@@ -237,7 +239,7 @@ private:
     void addSubscriptionStatusListener(service_id_t serviceId,
             instance_id_t instanceId,
             eventgroup_id_t eventGroupId,
-            event_id_t _eventId, bool isSelective);
+            event_id_t _eventId, event_type_e eventType);
 
     void queueSubscriptionStatusHandler(service_id_t serviceId,
             instance_id_t instanceId);
@@ -282,7 +284,8 @@ private:
             std::tuple<
                     std::chrono::steady_clock::time_point,
                     std::shared_ptr<vsomeip::message>,
-                    std::unique_ptr<MessageReplyAsyncHandler> > > async_answers_map_t;
+                    std::unique_ptr<MessageReplyAsyncHandler>,
+                    Timeout_t > > async_answers_map_t;
     mutable async_answers_map_t asyncAnswers_;
     mutable async_answers_map_t asyncTimeouts_;
 
@@ -324,7 +327,7 @@ private:
             std::map<eventgroup_id_t,
                 std::map<event_id_t, std::uint32_t>>>> requestedEvents_;
 
-    std::map<service_id_t, std::map<instance_id_t, std::map<eventgroup_id_t, SubsciptionHandler_t>>> subscription_;
+    std::map<service_id_t, std::map<instance_id_t, std::map<eventgroup_id_t, AsyncSubscriptionHandler_t >>> subscription_;
     std::mutex subscriptionMutex_;
 
     std::map<std::shared_ptr<vsomeip::message>, session_id_fake_t> errorResponses_;
@@ -335,6 +338,8 @@ private:
             std::map<vsomeip::instance_t, std::set<vsomeip::event_t>>> registeredEvents_;
 
     mutable session_id_t lastSessionId_;
+
+    Timeout_t timeoutWarnThreshold;
 };
 
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_INPUT_STREAM_HPP_
-#define COMMONAPI_SOMEIP_INPUT_STREAM_HPP_
+#ifndef COMMONAPI_SOMEIP_INPUTSTREAM_HPP_
+#define COMMONAPI_SOMEIP_INPUTSTREAM_HPP_
 
 #include <CommonAPI/InputStream.hpp>
 #include <CommonAPI/SomeIP/Message.hpp>
@@ -81,6 +81,35 @@ public:
 
     COMMONAPI_EXPORT virtual InputStream &readValue(uint32_t &_value, const uint8_t &_width, const bool &_permitZeroWidth);
 
+    template<int minimum, int maximum>
+    COMMONAPI_EXPORT InputStream &readValue(RangedInteger<minimum, maximum> &_value, const EmptyDeployment *) {
+        int32_t tempValue;
+        readValue(tempValue, static_cast<EmptyDeployment *>(nullptr));
+        if (tempValue < minimum || tempValue > maximum) {
+            errorOccurred_ = true;
+        }
+        if (!errorOccurred_) {
+            _value = tempValue;
+        }
+        return (*this);
+    }
+    template<int minimum, int maximum>
+    COMMONAPI_EXPORT InputStream &readValue(RangedInteger<minimum, maximum> &_value, const IntegerDeployment<int> *_depl) {
+
+        int32_t tempValue;
+        errorOccurred_ = _readBitValue(tempValue, (_depl ? _depl->bits_ : 32), true);
+        if (errorOccurred_ && _depl != nullptr && _depl->hasInvalid_) {
+            tempValue = _depl->invalid_;
+            errorOccurred_ = false;
+        }
+        if (tempValue < minimum || tempValue > maximum) {
+            errorOccurred_ = true;
+        }
+        if (!errorOccurred_) {
+            _value = tempValue;
+        }
+        return (*this);
+    }
     template<typename Base_>
     COMMONAPI_EXPORT InputStream &readValue(Enumeration<Base_> &_value, const EmptyDeployment *) {
         Base_ tmpValue;
@@ -519,6 +548,10 @@ public:
         } value;
         std::memset(value.raw_, 0, sizeof(Type_));
 
+	// sanity check for _bits
+        if (_bits > (sizeof(Type_) << 3))
+            _bits = (sizeof(Type_) << 3);
+
         if (_bits == 0 || remaining_ < size_t(((_bits - 1) >> 3) + 1)) {
             isError = true;
         } else {
@@ -700,4 +733,4 @@ private:
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_INPUT_STREAM_HPP_
+#endif // COMMONAPI_SOMEIP_INPUTSTREAM_HPP_

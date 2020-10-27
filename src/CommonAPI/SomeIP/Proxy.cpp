@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -250,16 +250,14 @@ void Proxy::onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
 }
 
 Proxy::Proxy(const Address &_address,
-             const std::shared_ptr<ProxyConnection> &connection,
-             bool hasSelective) :
+             const std::shared_ptr<ProxyConnection> &connection) :
         ProxyBase(connection),
         address_(_address),
         alias_(AddressTranslator::get()->getAddressAlias(_address)),
         proxyStatusEvent_(this),
         availabilityStatus_(AvailabilityStatus::UNKNOWN),
         availabilityHandlerId_(0),
-        interfaceVersionAttribute_(*this, 0x0, true, false),
-        hasSelectiveEvents_(hasSelective) {
+        interfaceVersionAttribute_(*this, 0x0, true, false) {
 }
 
 Proxy::~Proxy() {
@@ -290,7 +288,7 @@ bool Proxy::init() {
     if (!connection)
         return false;
 
-    connection->requestService(alias_, hasSelectiveEvents_);
+    connection->requestService(alias_);
 
     std::weak_ptr<Proxy> itsProxy = shared_from_this();
     availabilityHandlerId_ = connection->registerAvailabilityHandler(

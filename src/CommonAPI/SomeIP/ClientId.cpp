@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -23,8 +23,8 @@ public:
 namespace CommonAPI {
 namespace SomeIP {
 
-ClientId::ClientId(client_id_t client_id)
-    : client_id_(client_id) {
+ClientId::ClientId(client_id_t client_id, uid_t _uid, gid_t _gid)
+    : client_id_(client_id), uid_(_uid), gid_(_gid) {
 }
 
 ClientId::~ClientId() {
@@ -50,6 +50,14 @@ size_t ClientId::hashCode() {
 
 client_id_t ClientId::getClientId() {
     return client_id_;
+}
+
+uid_t ClientId::getUid() const {
+    return uid_;
+}
+
+gid_t ClientId::getGid() const {
+    return gid_;
 }
 
 } // namespace SomeIP

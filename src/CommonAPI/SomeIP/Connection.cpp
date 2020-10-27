@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -161,9 +161,8 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
 }
 
 void Connection::handleStubReceive(const std::shared_ptr<vsomeip::message> &_message) {
-    if(stubMessageHandler_) {
+    if (stubMessageHandler_)
         stubMessageHandler_(Message(_message));
-    }
 }
 
 void Connection::onConnectionEvent(state_type_e state) {
@@ -291,16 +290,31 @@ void Connection::cleanup() {
     while (!cleanupCancelled_) {
         if (std::cv_status::timeout ==
             cleanupCondition_.wait_for(itsLock, std::chrono::milliseconds(timeout))) {
-            std::chrono::steady_clock::time_point now =
+            const std::chrono::steady_clock::time_point now =
                     (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now();
             async_answers_map_t asyncAnswersToProcess;
             {
                 std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
                 auto it = asyncAnswers_.begin();
                 while (it != asyncAnswers_.end()) {
-                    if(now > std::get<0>(it->second)) {
-                        asyncAnswersToProcess[it->first] = std::move(it->second);
-                        it = asyncAnswers_.erase(it);
+                    if(now > std::get<0>(it->second)){
+                        const int warnThreshold(std::get<3>(it->second));
+                        if (0 == warnThreshold) {
+                            asyncAnswersToProcess[it->first] = std::move(it->second);
+                            it = asyncAnswers_.erase(it);
+                        } else {
+                            auto & message = std::get<1>(it->second);
+                            std::stringstream log;
+                            log << "(" << std::setw(4) << std::setfill('0') << std::hex << message->get_client()
+                                << ":" << std::setw(4) << std::setfill('0') << std::hex << message->get_session()
+                                << ") response delayed " << std::setw(4) << std::setfill('0') << std::hex << message->get_service()
+                                << "." << std::setw(4) << std::setfill('0') << std::hex << message->get_instance()
+                                << "." << std::setw(4) << std::setfill('0') << std::hex << message->get_method()
+                                << " - " << std::dec << (warnThreshold*3) << " of " << (warnThreshold<<2) << " ms";
+                            COMMONAPI_WARNING(log.str());
+                            std::get<0>(it->second) += std::chrono::milliseconds(warnThreshold);
+                            std::get<3>(it->second) = 0;
+                        }
                     } else {
                         it++;
                     }
@@ -361,9 +375,20 @@ Connection::Connection(const std::string &_name)
         asyncAnswersCleanupThread_(NULL),
         cleanupCancelled_(false),
         activeConnections_(0),
-        lastSessionId_(0) {
+        lastSessionId_(0),
+        timeoutWarnThreshold(std::numeric_limits<Timeout_t>::max()) {
     std::string appId = Runtime::getProperty("LogApplication");
     std::string contextId = Runtime::getProperty("LogContext");
+
+#if defined(COMMONAPI_LOGLEVEL) && (COMMONAPI_LOGLEVEL_WARNING <= COMMONAPI_LOGLEVEL)
+    const char * pEnv = std::getenv("COMMONAPI_SEND_TIMEOUT_WARN_THRESHOLD");
+    if (pEnv) {
+        const int tmp = std::stoi(pEnv);
+        if (0 < tmp) {
+            timeoutWarnThreshold = 1000 * tmp;
+        }
+    }
+#endif
 
     if (appId != "")
         vsomeip::runtime::set_property("LogApplication", appId);
@@ -504,7 +529,7 @@ bool Connection::sendMessageWithReplyAsync(
 
     {
         std::lock_guard<std::recursive_mutex> lock(sendReceiveMutex_);
-        application_->send(message.message_, true);
+        application_->send(message.message_);
         const vsomeip::session_t itsSession = message.getSessionId();
         if (lastSessionId_ == itsSession) {
             return false;
@@ -517,13 +542,18 @@ bool Connection::sendMessageWithReplyAsync(
                     ", SessionID: ", message.getSessionId());
         }
 
+#if defined(COMMONAPI_LOGLEVEL) && (COMMONAPI_LOGLEVEL_WARNING <= COMMONAPI_LOGLEVEL)
+        const Timeout_t warnThreshold(timeoutWarnThreshold<=_info->timeout_?_info->timeout_>>2:0);
+#else
+        static const Timeout_t warnThreshold(0);
+#endif
         auto timeoutTime =
                 (std::chrono::steady_clock::time_point) std::chrono::steady_clock::now()
-                        + std::chrono::milliseconds(_info->timeout_);
+                        + std::chrono::milliseconds(_info->timeout_-warnThreshold);
 
         asyncAnswers_[itsSession] = std::make_tuple(
                 timeoutTime, message.message_,
-                std::move(messageReplyAsyncHandler));
+                std::move(messageReplyAsyncHandler), warnThreshold);
     }
     {
         std::lock_guard<std::mutex> itsLock(cleanupMutex_);
@@ -544,7 +574,7 @@ Message Connection::sendMessageWithReplyAndBlock(
     std::unique_lock<std::recursive_mutex> lock(sendReceiveMutex_);
 
     std::pair<std::map<session_id_fake_t, Message>::iterator, bool> itsAnswer;
-    application_->send(message.message_, true);
+    application_->send(message.message_);
     if (_info->sender_ != 0) {
         COMMONAPI_DEBUG("Message sent: SenderID: ", _info->sender_,
                     " - ClientID: ", message.getClientId(),
@@ -596,18 +626,16 @@ void Connection::addEventHandler(
         event_id_t eventId,
         std::weak_ptr<ProxyConnection::EventHandler> eventHandler,
         major_version_t major,
-        bool isField,
-        bool isSelective) {
+        event_type_e eventType) {
 
     (void)major;
-    (void)isField;
     std::unique_lock<std::mutex> lock(eventHandlerMutex_);
     if(auto itsHandler = eventHandler.lock()) {
         eventHandlers_[serviceId][instanceId][eventId][itsHandler.get()] = eventHandler;
         const bool inserted(std::get<1>(subscriptions_[serviceId][instanceId][eventId].insert(eventGroupId)));
         if(inserted) {
             addSubscriptionStatusListener(serviceId, instanceId, eventGroupId,
-                    eventId, isSelective);
+                    eventId, eventType);
         }
     }
 }
@@ -631,7 +659,7 @@ void Connection::removeEventHandler(
             auto foundEventId = foundInstance->second.find(eventId);
             if (foundEventId != foundInstance->second.end()) {
                 foundEventId->second.erase(eventHandler);
-                if (foundEventId->second.size() == 0) {
+                if (foundEventId->second.empty()) {
                     foundInstance->second.erase(foundEventId);
                     lastSubscriber = true;
                     application_->unsubscribe(serviceId, instanceId,
@@ -655,16 +683,16 @@ void Connection::removeEventHandler(
             auto foundPendingInstance = foundPendingService->second.find(instanceId);
             if (foundPendingInstance != foundPendingService->second.end()) {
                 foundPendingInstance->second.erase(eventId);
-                if (foundPendingInstance->second.size() == 0) {
+                if (foundPendingInstance->second.empty()) {
                     foundPendingService->second.erase(foundPendingInstance);
-                    if (foundPendingService->second.size() == 0)
+                    if (foundPendingService->second.empty())
                         subscriptions_.erase(foundPendingService);
                 }
             }
         }
 
-        application_->register_subscription_status_handler(serviceId, instanceId,
-                    eventGroupId, eventId, nullptr);
+        application_->unregister_subscription_status_handler(serviceId,
+                instanceId, eventGroupId, eventId);
     }
 }
 
@@ -676,14 +704,13 @@ void Connection::subscribe(service_id_t serviceId, instance_id_t instanceId,
     insertSubscriptionStatusListener(serviceId, instanceId, eventGroupId, eventId,
             eventHandler, _tag);
 
-    application_->subscribe(serviceId, instanceId, eventGroupId, major,
-            vsomeip::subscription_type_e::SU_RELIABLE_AND_UNRELIABLE, eventId);
+    application_->subscribe(serviceId, instanceId, eventGroupId, major, eventId);
 }
 
 void Connection::addSubscriptionStatusListener(service_id_t serviceId,
         instance_id_t instanceId,
         eventgroup_id_t eventGroupId,
-        event_id_t eventId, bool isSelective) {
+        event_id_t eventId, event_type_e eventType) {
 
     auto statusHandler = [this] (
                 const vsomeip::service_t _service, const vsomeip::instance_t _instance,
@@ -722,7 +749,8 @@ void Connection::addSubscriptionStatusListener(service_id_t serviceId,
         }
     };
     application_->register_subscription_status_handler(serviceId, instanceId,
-                eventGroupId, eventId, statusHandler, isSelective);
+                eventGroupId, eventId, statusHandler,
+                eventType != event_type_e::ET_SELECTIVE_EVENT ? false : true);
 
 }
 
@@ -885,7 +913,7 @@ Connection::unregisterService(const Address &_address) {
 }
 
 void
-Connection::requestService(const Address &_address, bool _hasSelective) {
+Connection::requestService(const Address &_address) {
     service_id_t service = _address.getService();
     instance_id_t instance = _address.getInstance();
     major_version_t majorVersion = _address.getMajorVersion();
@@ -908,8 +936,7 @@ Connection::requestService(const Address &_address, bool _hasSelective) {
     }
     if (!found) {
         application_->request_service(service, instance,
-                                      majorVersion, minorVersion,
-                                      _hasSelective);
+                                      majorVersion, minorVersion);
 
         vsomeip::message_handler_t handler
             = std::bind(&Connection::receive, shared_from_this(), std::placeholders::_1);
@@ -946,7 +973,8 @@ Connection::releaseService(const Address &_address) {
 
 void
 Connection::registerEvent(service_id_t _service, instance_id_t _instance,
-        event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups, bool _isField) {
+        event_id_t _event, const std::set<eventgroup_id_t> &_eventGroups,
+        event_type_e _type, reliability_type_e _reliability) {
     {
         std::lock_guard<std::mutex> itsLock(registeredEventsMutex_);
         bool found(false);
@@ -964,7 +992,8 @@ Connection::registerEvent(service_id_t _service, instance_id_t _instance,
         }
     }
     application_->offer_event(_service, _instance,
-            _event, _eventGroups, _isField);
+            _event, _eventGroups, _type, std::chrono::milliseconds::zero(),
+            false,true, nullptr, _reliability);
 }
 
 void
@@ -991,7 +1020,8 @@ Connection::unregisterEvent(service_id_t _service, instance_id_t _instance,
 
 void
 Connection::requestEvent(service_id_t _service, instance_id_t _instance,
-        event_id_t _event, eventgroup_id_t _eventGroup, bool _isField) {
+        event_id_t _event, eventgroup_id_t _eventGroup, event_type_e _type,
+        reliability_type_e _reliability) {
     bool found(false);
     {
         std::lock_guard<std::mutex> lock(requestedEventsMutex_);
@@ -1019,7 +1049,7 @@ Connection::requestEvent(service_id_t _service, instance_id_t _instance,
         itsEventGroups.insert(_eventGroup);
 
         application_->request_event(_service, _instance,
-                _event, itsEventGroups, _isField);
+                _event, itsEventGroups, _type, _reliability);
     }
 }
 
@@ -1148,8 +1178,8 @@ void Connection::queueSubscriptionStatusHandler(service_id_t serviceId,
     }
 }
 
-void Connection::registerSubsciptionHandler(const Address &_address,
-        const eventgroup_id_t _eventgroup, SubsciptionHandler_t _handler) {
+void Connection::registerSubscriptionHandler(const Address &_address,
+        const eventgroup_id_t _eventgroup, AsyncSubscriptionHandler_t _handler) {
 
     std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
     subscription_[_address.getService()][_address.getInstance()][_eventgroup] = _handler;
@@ -1162,12 +1192,13 @@ void Connection::registerSubsciptionHandler(const Address &_address,
         auto self = shared_from_this();
         auto itsAsyncSubscriptionHandler = [this, self, _address, _eventgroup](
             client_id_t _client,
+            uid_t _uid, gid_t _gid,
             bool _subscribe,
-            std::function<void(const bool)> _accepted_cb) {
+            SubscriptionAcceptedHandler_t _acceptedHandler) {
 
             // hooks must be called by the mainloop
-            proxyPushFunctionToMainLoop([this, _client, _subscribe, _accepted_cb, _address, _eventgroup]() {
-                SubsciptionHandler_t itsHandler;
+            proxyPushFunctionToMainLoop([this, _client, _uid, _gid, _subscribe, _acceptedHandler, _address, _eventgroup]() {
+                AsyncSubscriptionHandler_t itsHandler;
                 {
                     std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
                     auto foundService = subscription_.find(_address.getService());
@@ -1182,20 +1213,20 @@ void Connection::registerSubsciptionHandler(const Address &_address,
                     }
                 }
                 if(itsHandler) {
-                    _accepted_cb(itsHandler(_client, _subscribe));
+                    itsHandler(_client, _uid, _gid, _subscribe, _acceptedHandler);
                 } else {
-                    _accepted_cb(true);
+                    _acceptedHandler(true);
                 }
             });
 
         };
         application_->register_async_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, itsAsyncSubscriptionHandler);
     } else {
-        application_->register_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, _handler);
+        application_->register_async_subscription_handler(_address.getService(), _address.getInstance(), _eventgroup, _handler);
     }
 }
 
-void Connection::unregisterSubsciptionHandler(const Address &_address,
+void Connection::unregisterSubscriptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup) {
     std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
     {
@@ -1250,7 +1281,7 @@ void Connection::proxyPushMessageToMainLoop(const Message &_message,
         asyncAnswers_[itsSession]
             = std::make_tuple(
                     timeoutTime, _message.message_,
-                    std::move(messageReplyAsyncHandler));
+                    std::move(messageReplyAsyncHandler), 0);
     }
 
     //handle the message by the mainloop or by the current thread

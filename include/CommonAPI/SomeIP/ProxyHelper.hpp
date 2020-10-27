@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,14 +7,16 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_PROXY_HELPER_HPP_
-#define COMMONAPI_SOMEIP_PROXY_HELPER_HPP_
+#ifndef COMMONAPI_SOMEIP_PROXYHELPER_HPP_
+#define COMMONAPI_SOMEIP_PROXYHELPER_HPP_
 
 #include <functional>
 #include <future>
 #include <memory>
 #include <string>
 #include <mutex>
+
+#include <CommonAPI/Logger.hpp>
 
 #include <CommonAPI/SomeIP/Message.hpp>
 #include <CommonAPI/SomeIP/ProxyAsyncCallbackHandler.hpp>
@@ -60,7 +62,12 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                 OutputStream outputStream(_methodCall, _isLittleEndian);
                 const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
-                    _callStatus = CallStatus::OUT_OF_MEMORY;
+                    COMMONAPI_ERROR("MethodSync(someip): serialization failed: [",
+                            _methodCall.getServiceId(), ".",
+                            _methodCall.getInstanceId(), ".",
+                            _methodCall.getMethodId(), "]");
+
+                    _callStatus = CallStatus::SERIALIZATION_ERROR;
                     return;
                 }
                 outputStream.flush();
@@ -94,7 +101,12 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                 OutputStream outputStream(_methodCall, _isLittleEndian);
                 const bool success = SerializableArguments<InArgs_...>::serialize(outputStream, _inArgs...);
                 if (!success) {
-                    _callStatus = CallStatus::OUT_OF_MEMORY;
+                    COMMONAPI_ERROR("MethodSync w/ reply (someip): serialization failed: [",
+                            _methodCall.getServiceId(), ".",
+                            _methodCall.getInstanceId(), ".",
+                            _methodCall.getMethodId(), "]");
+
+                    _callStatus = CallStatus::SERIALIZATION_ERROR;
                     return;
                 }
                 outputStream.flush();
@@ -116,7 +128,13 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
                 InputStream inputStream(reply, _isLittleEndian);
                 const bool success = SerializableArguments<OutArgs_...>::deserialize(inputStream, _outArgs...);
                 if (!success) {
-                    _callStatus = CallStatus::REMOTE_ERROR;
+                    COMMONAPI_ERROR("MethodSync w/ reply (someip): reply deserialization failed: [",
+                            reply.getServiceId(), ".",
+                            reply.getInstanceId(), ".",
+                            reply.getMethodId(), ".",
+                            reply.getSessionId(), ".");
+
+                    _callStatus = CallStatus::SERIALIZATION_ERROR;
                     return;
                 }
             }
@@ -167,8 +185,13 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
             OutputStream outputStream(_message, _isLittleEndian);
             const bool success = SerializableArguments< InArgs_... >::serialize(outputStream, _inArgs...);
             if (!success) {
+                COMMONAPI_ERROR("MethodAsync(someip): serialization failed: [",
+                        _message.getServiceId(), ".",
+                        _message.getInstanceId(), ".",
+                        _message.getMethodId(), "]");
+
                 std::promise<CallStatus> promise;
-                promise.set_value(CallStatus::OUT_OF_MEMORY);
+                promise.set_value(CallStatus::SERIALIZATION_ERROR);
                 return promise.get_future();
             }
             outputStream.flush();
@@ -234,7 +257,7 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
         }
     }
 
-    template <int... ArgIndices_>
+    template <size_t... ArgIndices_>
     static void callCallbackForCallStatus(CallStatus callStatus,
             std::function<void(CallStatus, OutArgs_...)> _callback,
             index_sequence<ArgIndices_...>,
@@ -254,4 +277,4 @@ struct ProxyHelper<In_<InArgs_...>, Out_<OutArgs_...>> {
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_PROXY_HELPER_HPP_
+#endif // COMMONAPI_SOMEIP_PROXYHELPER_HPP_

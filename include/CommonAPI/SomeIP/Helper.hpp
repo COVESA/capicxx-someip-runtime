@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2013-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -13,23 +13,23 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-template <int ...>
+template <size_t ...>
 struct index_sequence {};
 
 
-template <int N_, int ...S_>
+template <size_t N_, size_t ...S_>
 struct make_sequence : make_sequence<N_-1, N_-1, S_...> {};
 
-template <int ...S_>
+template <size_t ...S_>
 struct make_sequence<0, S_...> {
     typedef index_sequence<S_...> type;
 };
 
 
-template <int N_, int Offset_, int ...S_>
+template <size_t N_, size_t Offset_, size_t ...S_>
 struct make_sequence_range : make_sequence_range<N_-1, Offset_, N_-1+Offset_, S_...> {};
 
-template <int Offset_, int ...S_>
+template <size_t Offset_, size_t ...S_>
 struct make_sequence_range<0, Offset_, S_...> {
     typedef index_sequence<S_...> type;
 };

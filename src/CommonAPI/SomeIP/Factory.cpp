@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -93,9 +93,20 @@ Factory::createProxy(
     COMMONAPI_VERBOSE("Creating proxy for \"", _domain, ":", _interface, ":",
             _instance, "\"");
 
-    auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
-    if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
-        CommonAPI::Address address(_domain, _interface, _instance);
+    auto proxyCreateFunctionsIterator
+        = proxyCreateFunctions_.lower_bound(_interface);
+    if (proxyCreateFunctionsIterator
+            != proxyCreateFunctions_.end()) {
+        std::string itsInterface(_interface);
+        if (proxyCreateFunctionsIterator->first != _interface) {
+            std::string itsInterfaceMajor(_interface.substr(0, _interface.find('_')));
+            if (proxyCreateFunctionsIterator->first.find(itsInterfaceMajor) != 0)
+                return nullptr;
+
+            itsInterface = proxyCreateFunctionsIterator->first;
+        }
+
+        CommonAPI::Address address(_domain, itsInterface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
             std::shared_ptr<Connection> itsConnection
@@ -124,9 +135,20 @@ Factory::createProxy(
     COMMONAPI_VERBOSE("Creating proxy for \"", _domain, ":", _interface, ":",
             _instance, "\"");
 
-    auto proxyCreateFunctionsIterator = proxyCreateFunctions_.find(_interface);
-    if (proxyCreateFunctionsIterator != proxyCreateFunctions_.end()) {
-        CommonAPI::Address address(_domain, _interface, _instance);
+    auto proxyCreateFunctionsIterator
+        = proxyCreateFunctions_.lower_bound(_interface);
+    if (proxyCreateFunctionsIterator
+            != proxyCreateFunctions_.end()) {
+        std::string itsInterface(_interface);
+        if (proxyCreateFunctionsIterator->first != _interface) {
+            std::string itsInterfaceMajor(_interface.substr(0, _interface.find('_')));
+            if (proxyCreateFunctionsIterator->first.find(itsInterfaceMajor) != 0)
+                return nullptr;
+
+            itsInterface = proxyCreateFunctionsIterator->first;
+        }
+
+        CommonAPI::Address address(_domain, itsInterface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
             std::shared_ptr<Connection> itsConnection
@@ -156,10 +178,19 @@ Factory::registerStub(
             _instance, "\"");
 
     auto stubAdapterCreateFunctionsIterator
-        = stubAdapterCreateFunctions_.find(_interface);
+        = stubAdapterCreateFunctions_.lower_bound(_interface);
     if (stubAdapterCreateFunctionsIterator
             != stubAdapterCreateFunctions_.end()) {
-        CommonAPI::Address address(_domain, _interface, _instance);
+        std::string itsInterface(_interface);
+        if (stubAdapterCreateFunctionsIterator->first != _interface) {
+            std::string itsInterfaceMajor(_interface.substr(0, _interface.find('_')));
+            if (stubAdapterCreateFunctionsIterator->first.find(itsInterfaceMajor) != 0)
+                return false;
+
+            itsInterface = stubAdapterCreateFunctionsIterator->first;
+        }
+
+        CommonAPI::Address address(_domain, itsInterface, _instance);
         Address someipAddress;
         AddressTranslator::get()->translate(address, someipAddress);
 
@@ -169,6 +200,7 @@ Factory::registerStub(
                 = stubAdapterCreateFunctionsIterator->second(
                         someipAddress, itsConnection, _stub);
             if (adapter) {
+                adapter->registerSelectiveEventHandlers();
                 adapter->init(adapter);
                 if (registerStubAdapter(adapter))
                     return true;
@@ -192,10 +224,19 @@ Factory::registerStub(
             _instance, "\"");
 
     auto stubAdapterCreateFunctionsIterator
-        = stubAdapterCreateFunctions_.find(_interface);
+        = stubAdapterCreateFunctions_.lower_bound(_interface);
     if (stubAdapterCreateFunctionsIterator
             != stubAdapterCreateFunctions_.end()) {
-        CommonAPI::Address address(_domain, _interface, _instance);
+        std::string itsInterface(_interface);
+        if (stubAdapterCreateFunctionsIterator->first != _interface) {
+            std::string itsInterfaceMajor(_interface.substr(0, _interface.find('_')));
+            if (stubAdapterCreateFunctionsIterator->first.find(itsInterfaceMajor) != 0)
+                return false;
+
+            itsInterface = stubAdapterCreateFunctionsIterator->first;
+        }
+
+        CommonAPI::Address address(_domain, itsInterface, _instance);
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
             std::shared_ptr<Connection> itsConnection = getConnection(_context);
@@ -204,6 +245,7 @@ Factory::registerStub(
                     = stubAdapterCreateFunctionsIterator->second(
                             someipAddress, itsConnection, _stub);
                 if (adapter) {
+                    adapter->registerSelectiveEventHandlers();
                     adapter->init(adapter);
                     if (registerStubAdapter(adapter))
                         return true;
@@ -263,6 +305,8 @@ Factory::unregisterStub(const std::string &_domain,
     const auto adapter = adapterResult->second;
     const auto &connection = adapter->getConnection();
     const auto stubManager = connection->getStubManager();
+
+    adapter->unregisterSelectiveEventHandlers();
     stubManager->unregisterStubAdapter(adapter);
 
     if(!services_.erase(address.getAddress())) {
@@ -293,9 +337,10 @@ Factory::createStubAdapter(
             != stubAdapterCreateFunctions_.end()) {
         stubAdapter = stubAdapterCreateFunctionsIterator->second(
                         _address, _connection, _stub);
-        if (stubAdapter)
+        if (stubAdapter) {
+            stubAdapter->registerSelectiveEventHandlers();
             stubAdapter->init(stubAdapter);
-        else
+        } else
             COMMONAPI_ERROR("Couldn't create stubAdapter for " + _interface);
     } else {
         COMMONAPI_ERROR("Didn't find stubAdapter create function for: "

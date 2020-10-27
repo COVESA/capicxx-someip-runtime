@@ -1,0 +1,29 @@
+capi_someip_srcs = [
+    "src/CommonAPI/SomeIP/**/*.cpp"
+]
+
+cc_library_shared {
+    name: "libCommonAPI-SomeIP",
+    vendor: true,
+    srcs: capi_someip_srcs,
+    defaults: [
+        "capi_defaults"
+    ],
+    cppflags: [
+        "-D_GLIBCXX_USE_NANOSLEEP",
+        "-DBOOST_LOG_DYN_LINK",
+        "-pthread",
+	"-Wno-unused-private-field"
+    ],
+    local_include_dirs: [
+        "include"
+    ],
+    export_include_dirs: [
+	"include"
+    ],
+    shared_libs: [
+	"libCommonAPI",
+	"libvsomeip"
+    ],
+    rtti: true
+}

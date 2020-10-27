@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,8 +7,8 @@
 #error "Only <CommonAPI/CommonAPI.hpp> can be included directly, this file may disappear or change contents."
 #endif
 
-#ifndef COMMONAPI_SOMEIP_PROXY_ASYNC_CALLBACK_HANDLER_HPP_
-#define COMMONAPI_SOMEIP_PROXY_ASYNC_CALLBACK_HANDLER_HPP_
+#ifndef COMMONAPI_SOMEIP_PROXYASYNCCALLBACKHANDLER_HPP_
+#define COMMONAPI_SOMEIP_PROXYASYNCCALLBACKHANDLER_HPP_
 
 #include <functional>
 #include <future>
@@ -60,7 +60,7 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
     }
 
  private:
-    template < int... ArgIndices_ >
+    template<size_t... ArgIndices_>
     inline CallStatus handleMessageReply(const CallStatus _callStatus, const Message &message, index_sequence< ArgIndices_... >) {
         CallStatus callStatus = _callStatus;
         if (callStatus == CallStatus::SUCCESS) {
@@ -71,7 +71,8 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
                     InputStream inputStream(message, isLittleEndian_);
                     const bool success = SerializableArguments< ArgTypes_... >::deserialize(inputStream, std::get< ArgIndices_ >(argTuple_)...);
                     if (!success) {
-                        callStatus = CallStatus::REMOTE_ERROR;
+                        COMMONAPI_ERROR("ProxyAsyncCallbackHandler (someip): deserialization failed!");
+                        callStatus = CallStatus::SERIALIZATION_ERROR;
                     }
                 }
             } else {
@@ -95,4 +96,4 @@ class ProxyAsyncCallbackHandler: public ProxyConnection::MessageReplyAsyncHandle
 } // namespace SomeIP
 } // namespace CommonAPI
 
-#endif // COMMONAPI_SOMEIP_PROXY_ASYNC_CALLBACK_HANDLER_HPP_
+#endif // COMMONAPI_SOMEIP_PROXYASYNCCALLBACKHANDLER_HPP_

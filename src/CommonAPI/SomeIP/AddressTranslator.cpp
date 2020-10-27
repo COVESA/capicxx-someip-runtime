@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2015-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -82,7 +82,18 @@ AddressTranslator::translate(const CommonAPI::Address &_key, Address &_value) {
 #else
     std::lock_guard<std::mutex> itsLock(mutex_);
 #endif
+#ifdef COMMONAPI_ENABLE_ADDRESS_ALIASES
+    CommonAPI::Address itsKey(_key);
+
+    // Check whether this is an alias
+    auto itsOther = others_.find(_key);
+    if (itsOther != others_.end())
+        itsKey = itsOther->second;
+
+    const auto it = forwards_.find(itsKey);
+#else
     const auto it = forwards_.find(_key);
+#endif // COMMONAPI_ENABLE_ADDRESS_ALIASES
     if (it != forwards_.end()) {
         _value = it->second;
     } else {
@@ -149,9 +160,16 @@ AddressTranslator::insert(
             COMMONAPI_DEBUG(
                 "Added address mapping: ", address, " <--> ", someipAddress);
         } else if(bw != backwards_.end() && bw->second != _address) {
+#ifdef COMMONAPI_ENABLE_ADDRESS_ALIASES
+            COMMONAPI_WARNING("Trying to overwrite existing SomeIP address: ", someipAddress);
+            COMMONAPI_WARNING("Existing CommonAPI address: ", _address);
+            COMMONAPI_WARNING("Setting alias: ", _address, " --> ", bw->second);
+            others_[_address] = bw->second;
+#else
             COMMONAPI_ERROR("Trying to overwrite existing SomeIP address which is "
                     "already mapped to a CommonAPI address: ",
                     someipAddress, " <--> ", _address);
+#endif // COMMONAPI_ENABLE_ADDRESS_ALIASES
         } else if(fw != forwards_.end() && fw->second != someipAddress) {
             COMMONAPI_ERROR("Trying to overwrite existing CommonAPI address which is "
                     "already mapped to a SomeIP address: ",
@@ -501,5 +519,5 @@ AddressTranslator::readValue(const std::string &_data,
     return true;
 }
 
-} /* namespace SomeIP */
-} /* namespace CommonAPI */
+} // namespace SomeIP
+} // namespace CommonAPI

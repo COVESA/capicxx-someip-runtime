@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -314,17 +314,27 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
 
     uint32_t byteBufferMinLength = (_depl ? _depl->byteBufferMinLength_ : 0);
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
+    uint8_t byteBufferLengthWidth = (_depl ? _depl->byteBufferLengthWidth_ : 4);
 
-    uint32_t itsSize;
+    uint32_t itsSize; // this affects how many bytes are read
+    uint32_t maxSize; // this affects how many bytes are stored
 
     // Read array size
-    readValue(itsSize, 4, true);
+    if (byteBufferLengthWidth != 0)
+        readValue(itsSize, byteBufferLengthWidth, true);
+    else
+        itsSize = byteBufferMaxLength;
 
     // Reset target
     _value.clear();
 
-    if (itsSize < byteBufferMinLength
-            || (0 != byteBufferMaxLength && itsSize > byteBufferMaxLength)
+    // check for cutoff
+    if (0 != byteBufferMaxLength && itsSize > byteBufferMaxLength)
+        maxSize = byteBufferMaxLength;
+    else
+        maxSize = itsSize;
+
+    if ((byteBufferLengthWidth != 0 && itsSize < byteBufferMinLength)
             || itsSize > remaining_) {
         errorOccurred_ = true;
     }
@@ -332,7 +342,7 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
     // Read elements, if reading size has been successful
     if (!hasError()) {
         byte_t *base = _readRaw(itsSize);
-        _value.assign(base, base+itsSize);
+        _value.assign(base, base+maxSize);
     }
 
     return (*this);

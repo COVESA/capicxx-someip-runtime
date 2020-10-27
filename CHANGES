@@ -1,6 +1,9 @@
 Changes
 =======
 
+v3.2.0
+- Adapt to CommonAPI v3.2.0
+
 v3.1.12.17
 - Fix race condition which could occur when doing calls on an
   unavailable proxy. The race could lead to waiting the complete

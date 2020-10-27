@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
+// Copyright (C) 2014-2020 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -184,6 +184,13 @@ bool Message::isValidCRC() const {
     return message_->is_valid_crc();
 }
 
+uid_t Message::getUid() const {
+    return message_->get_uid();
+}
+
+gid_t Message::getGid() const {
+    return message_->get_gid();
+}
 
 } // namespace SomeIP
 } // namespace CommonAPI
