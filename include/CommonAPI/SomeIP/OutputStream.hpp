@@ -306,6 +306,23 @@ public:
         return (*this);
     }
 
+    template<typename ElementType_,
+        typename std::enable_if<(std::is_same<int8_t, ElementType_>::value ||
+                                 std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<ElementType_> &_value,
+                             const EmptyDeployment *_depl) {
+        bitAlign();
+
+        (void)_depl;
+
+        _writeValue(uint32_t(_value.size()), 4);
+        if (!hasError() && _value.size()) {
+            _writeRaw(reinterpret_cast<const byte_t *>(&_value[0]), _value.size());
+        }
+
+        return (*this);
+    }
+
     template<typename ElementType_, typename ElementDepl_,
         typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
                                  !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
@@ -351,6 +368,34 @@ public:
             size_t position2Write = popPosition();
             _writeValueAt(uint32_t(length), arrayLengthWidth, uint32_t(position2Write));
         }
+
+        return (*this);
+    }
+
+    template<typename ElementType_,
+        typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
+                                 !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT OutputStream &writeValue(const std::vector<ElementType_> &_value,
+                             const EmptyDeployment *_depl) {
+        bitAlign();
+
+        (void)_depl;
+
+        pushPosition();
+        // Length field placeholder
+        _writeValue(static_cast<uint32_t>(0), 4);
+        pushPosition(); // Start of vector data
+
+        for (auto i : _value) {
+            writeValue(i, static_cast<EmptyDeployment *>(nullptr));
+            if (hasError()) {
+                break;
+            }
+        }
+
+        // Write number of written bytes to placeholder position
+        uint32_t length = uint32_t(getPosition() - popPosition());
+        _writeValueAt(length, popPosition());
 
         return (*this);
     }
