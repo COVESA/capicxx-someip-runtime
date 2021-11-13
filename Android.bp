@@ -23,7 +23,7 @@ cc_library_shared {
     ],
     shared_libs: [
 	"libCommonAPI",
-	"libvsomeip"
+	"libvsomeip3"
     ],
     rtti: true
 }
