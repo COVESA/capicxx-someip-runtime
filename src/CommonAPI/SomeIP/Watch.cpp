@@ -3,10 +3,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include <CommonAPI/SomeIP/Configuration.hpp>
 #include <CommonAPI/SomeIP/Watch.hpp>
 
 #include <fcntl.h>
+
 #include <cstdio>
+#include <sstream>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -27,13 +30,14 @@
 namespace CommonAPI {
 namespace SomeIP {
 
-Watch::Watch(const std::shared_ptr<Connection>& _connection) :
+Watch::Watch(const std::shared_ptr<Connection> &_connection) :
 #ifdef _WIN32
-        pipeValue_(4)
+        pipeValue_(4),
 #else
         eventFd_(0),
-        eventFdValue_(1)
+        eventFdValue_(1),
 #endif
+        lastProcessing_()
 {
 #ifdef _WIN32
     WSADATA wsaData;
@@ -169,9 +173,25 @@ Watch::Watch(const std::shared_ptr<Connection>& _connection) :
     pollFileDescriptor_.events = POLLIN;
 
     connection_ = _connection;
+
+    auto itsConfiguration = Configuration::get();
+    max_processing_time_ = itsConfiguration->getMaxProcessingTime(_connection->getName());
+    max_queue_size_ = itsConfiguration->getMaxQueueSize(_connection->getName());
+
+    is_supervising_ = (max_processing_time_ > 0 || max_queue_size_ > 0);
+    supervisor_ = std::make_shared<std::thread>(
+            std::bind(&Watch::supervise, this));
 }
 
 Watch::~Watch() {
+    {
+        std::lock_guard<std::mutex> itsLock(superviseMutex_);
+        is_supervising_ = false;
+        superviseCondition_.notify_one();
+    }
+    if (supervisor_ && supervisor_->joinable())
+        supervisor_->join();
+
 #ifdef _WIN32
     // shutdown the connection since no more data will be sent
     int iResult = shutdown(pipeFileDescriptors_[0], SD_SEND);
@@ -226,7 +246,16 @@ void Watch::removeDependentDispatchSource(CommonAPI::DispatchSource* _dispatchSo
 
 void Watch::pushQueue(std::shared_ptr<QueueEntry> _queueEntry) {
     {
-        std::unique_lock<std::mutex> itsLock(queueMutex_);
+        std::lock_guard<std::mutex> itsLock(lastProcessingMutex_);
+        // Record the time when the first entry is queued so that the supervisor can detect
+        // when the main loop becomes blocked.
+        if (!lastProcessing_.time_since_epoch().count()) {
+            lastProcessing_ = std::chrono::steady_clock::now();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> itsLock(queueMutex_);
         queue_.push(_queueEntry);
     }
 
@@ -282,26 +311,84 @@ void Watch::popQueue() {
 #endif
 
     {
-        std::unique_lock<std::mutex> itsLock(queueMutex_);
+        std::lock_guard<std::mutex> itsLock(queueMutex_);
         queue_.pop();
     }
 }
 
 std::shared_ptr<QueueEntry> Watch::frontQueue() {
-    std::unique_lock<std::mutex> itsLock(queueMutex_);
+    std::lock_guard<std::mutex> itsLock(queueMutex_);
 
     return queue_.front();
 }
 
 bool Watch::emptyQueue() {
-    std::unique_lock<std::mutex> itsLock(queueMutex_);
+    std::lock_guard<std::mutex> itsLock(queueMutex_);
 
     return queue_.empty();
 }
 
 void Watch::processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry) {
-    if(auto connection = connection_.lock())
+    if (auto connection = connection_.lock()) {
         _queueEntry->process(connection);
+
+        std::lock_guard<std::mutex> itsLock(lastProcessingMutex_);
+        lastProcessing_ = std::chrono::steady_clock::now();
+    }
+}
+
+void Watch::supervise() {
+    {
+        auto itsConnection = connection_.lock();
+        if (itsConnection) {
+            COMMONAPI_INFO("Supervising watch[", itsConnection->getName(), "] --> (",
+                max_processing_time_, ", ", max_queue_size_, ")");
+        } else {
+            COMMONAPI_WARNING("Supervising watch[<unknown>] --> (",
+                        max_processing_time_, ", ", max_queue_size_, ")");
+        }
+    }
+
+    std::unique_lock<std::mutex> itsSuperviseLock(superviseMutex_);
+    while (is_supervising_) {
+        if (!emptyQueue()) {
+            std::chrono::milliseconds itsDuration;
+            std::size_t itsQueueSize;
+
+            {
+                std::lock_guard<std::mutex> itsLock(lastProcessingMutex_);
+                itsDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - lastProcessing_);
+            }
+            {
+                std::lock_guard<std::mutex> itsLock(queueMutex_);
+                itsQueueSize = queue_.size();
+            }
+
+            if (0 < max_processing_time_
+                    && itsDuration.count() > max_processing_time_) {
+
+                std::stringstream itsMessage;
+                itsMessage << "Mainloop did not process a message for "
+                        << itsDuration.count() << "ms (#elements="
+                        << itsQueueSize << ")";
+
+                COMMONAPI_WARNING(itsMessage.str());
+            } else if (0 < max_queue_size_
+                    && itsQueueSize > max_queue_size_) {
+
+                std::stringstream itsMessage;
+                itsMessage << "Mainloop watch contains "
+                        << itsQueueSize << " elements."
+                        << " Maybe processing is too slow.";
+
+                COMMONAPI_WARNING(itsMessage.str());
+            }
+        }
+
+        if (is_supervising_)
+            superviseCondition_.wait_for(itsSuperviseLock, std::chrono::seconds(1));
+    }
 }
 
 } // namespace SomeIP

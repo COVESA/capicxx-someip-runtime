@@ -412,6 +412,11 @@ Connection::~Connection() {
     }
 }
 
+std::string
+Connection::getName() const {
+    return application_->get_name();
+}
+
 bool Connection::attachMainLoopContext(std::weak_ptr<MainLoopContext> mainLoopContext) {
     if (mainLoopContext_.lock() == mainLoopContext.lock())
         return true;
@@ -436,35 +441,57 @@ bool Connection::attachMainLoopContext(std::weak_ptr<MainLoopContext> mainLoopCo
 }
 
 bool Connection::connect(bool) {
-    if (!application_->init())
-        return false;
 
-    std::function<void(state_type_e)> connectionHandler = std::bind(&Connection::onConnectionEvent,
-                                                                    shared_from_this(),
-                                                                    std::placeholders::_1);
+    if (!application_->init())
+        return (false);
+
+    std::function<void(state_type_e)> connectionHandler
+            = std::bind(&Connection::onConnectionEvent, shared_from_this(),
+                    std::placeholders::_1);
     application_->register_state_handler(connectionHandler);
 
-    asyncAnswersCleanupThread_ = std::make_shared<std::thread>(&Connection::cleanup, this);
-    dispatchThread_ = std::make_shared<std::thread>(&Connection::dispatch, this);
-    return true;
+    asyncAnswersCleanupThread_ = std::make_shared<std::thread>(
+            &Connection::cleanup, shared_from_this());
+    dispatchThread_ = std::make_shared<std::thread>(
+            &Connection::dispatch, shared_from_this());
+
+    return (true);
 }
 
 void Connection::doDisconnect() {
     if (asyncAnswersCleanupThread_) {
+        bool isCleanupThread(std::this_thread::get_id()
+                == asyncAnswersCleanupThread_->get_id());
+
+        if (isCleanupThread)
+            asyncAnswersCleanupThread_->detach();
+
         {
             std::lock_guard<std::mutex> lg(cleanupMutex_);
             cleanupCancelled_ = true;
             cleanupCondition_.notify_one();
         }
-        if (asyncAnswersCleanupThread_->joinable())
-            asyncAnswersCleanupThread_->join();
+
+        if (!isCleanupThread) {
+            if (asyncAnswersCleanupThread_->joinable())
+                asyncAnswersCleanupThread_->join();
+        }
     }
 
     application_->stop();
-    if(dispatchThread_) {
-        if (dispatchThread_->joinable())
-            dispatchThread_->join();
+
+    if (dispatchThread_) {
+        bool isDispatchThread(std::this_thread::get_id()
+                == dispatchThread_->get_id());
+
+        if (isDispatchThread) {
+            dispatchThread_->detach();
+        } else {
+            if (dispatchThread_->joinable())
+                dispatchThread_->join();
+        }
     }
+
     application_->clear_all_handler();
 
     {
@@ -1181,7 +1208,7 @@ void Connection::queueSubscriptionStatusHandler(service_id_t serviceId,
 void Connection::registerSubscriptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup, AsyncSubscriptionHandler_t _handler) {
 
-    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+    std::lock_guard<std::recursive_mutex> itsLock(subscriptionMutex_);
     subscription_[_address.getService()][_address.getInstance()][_eventgroup] = _handler;
 
     if (auto lockedContext = mainLoopContext_.lock()) {
@@ -1192,15 +1219,16 @@ void Connection::registerSubscriptionHandler(const Address &_address,
         auto self = shared_from_this();
         auto itsAsyncSubscriptionHandler = [this, self, _address, _eventgroup](
             client_id_t _client,
-            uid_t _uid, gid_t _gid,
+            const vsomeip_sec_client_t *_sec_client,
+            const std::string &_env,
             bool _subscribe,
             SubscriptionAcceptedHandler_t _acceptedHandler) {
 
             // hooks must be called by the mainloop
-            proxyPushFunctionToMainLoop([this, _client, _uid, _gid, _subscribe, _acceptedHandler, _address, _eventgroup]() {
+            proxyPushFunctionToMainLoop([this, _client, _sec_client, _env, _subscribe, _acceptedHandler, _address, _eventgroup]() {
                 AsyncSubscriptionHandler_t itsHandler;
                 {
-                    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+                    std::lock_guard<std::recursive_mutex> itsLock(subscriptionMutex_);
                     auto foundService = subscription_.find(_address.getService());
                     if (foundService != subscription_.end()) {
                         auto foundInstance = foundService->second.find(_address.getInstance());
@@ -1212,8 +1240,8 @@ void Connection::registerSubscriptionHandler(const Address &_address,
                         }
                     }
                 }
-                if(itsHandler) {
-                    itsHandler(_client, _uid, _gid, _subscribe, _acceptedHandler);
+                if (itsHandler) {
+                    itsHandler(_client, _sec_client, _env, _subscribe, _acceptedHandler);
                 } else {
                     _acceptedHandler(true);
                 }
@@ -1228,7 +1256,7 @@ void Connection::registerSubscriptionHandler(const Address &_address,
 
 void Connection::unregisterSubscriptionHandler(const Address &_address,
         const eventgroup_id_t _eventgroup) {
-    std::lock_guard<std::mutex> itsLock(subscriptionMutex_);
+    std::lock_guard<std::recursive_mutex> itsLock(subscriptionMutex_);
     {
         auto foundService = subscription_.find(_address.getService());
         if (foundService != subscription_.end()) {

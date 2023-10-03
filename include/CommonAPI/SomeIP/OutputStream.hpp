@@ -149,7 +149,9 @@ public:
                  break;
              }
          } else {
-             writeValue(_value.value_, static_cast<EmptyDeployment *>(nullptr));
+             // Default enumeration width is 1 Byte
+             uint8_t value = static_cast<uint8_t>(_value);
+             writeValue(value, static_cast<EmptyDeployment *>(nullptr));
          }
          return (*this);
     }
@@ -454,8 +456,8 @@ public:
         // Initialize the source value
         value.typed_ = _value;
 
-	// sanity check bit count
-	if (_bits > (sizeof(Type_) << 3))
+    // sanity check bit count
+    if (_bits > (sizeof(Type_) << 3))
             _bits = (sizeof(Type_) << 3);
 
         if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
@@ -566,20 +568,7 @@ public:
                 byte_t raw[sizeof(Type_)];
             } value;
             value.typed = _value;
-    #if __BYTE_ORDER == __LITTLE_ENDIAN
-            if (isLittleEndian_) {
-                _writeRawAt(value.raw, sizeof(Type_), _position);
-            } else {
-                byte_t reordered[sizeof(Type_)];
-                byte_t *source = &value.raw[sizeof(Type_) - 1];
-                byte_t *target = reordered;
-                for (size_t i = 0; i < sizeof(Type_); ++i) {
-                    *target++ = *source--;
-                }
-                _writeRawAt(reordered, sizeof(Type_), _position);
-            }
-    #else
-            if (isLittleEndian_) {
+            if ((__BYTE_ORDER == __LITTLE_ENDIAN) != isLittleEndian_) {
                 byte_t reordered[sizeof(Type_)];
                 byte_t *source = &value.raw[sizeof(Type_) - 1];
                 byte_t *target = reordered;
@@ -590,7 +579,6 @@ public:
             } else {
                 _writeRawAt(value.raw, sizeof(Type_), _position);
             }
-    #endif
         } else {
             COMMONAPI_ERROR("SomeIP::OutputStream::_writeValueAt payload too small ",
                             payload_.size(), " pos: ", _position, " value size", sizeof(Type_));

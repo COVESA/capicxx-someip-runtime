@@ -52,7 +52,9 @@ byte_t *InputStream::_readRaw(const size_t _size) {
 }
 
 InputStream& InputStream::readValue(bool &_value, const EmptyDeployment *) {
-    errorOccurred_ = _readBitValue(_value, 8, false);
+    uint8_t itsValue;
+    errorOccurred_ = _readBitValue(itsValue, 8, false);
+    _value = ((itsValue & 0x1u) == 0x1u); // SIP_RPC_817
     return (*this);
 }
 

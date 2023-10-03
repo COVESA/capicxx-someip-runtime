@@ -70,6 +70,9 @@ class Message {
 
     COMMONAPI_EXPORT uid_t getUid() const;
     COMMONAPI_EXPORT gid_t getGid() const;
+    COMMONAPI_EXPORT sec_client_t getSecClient() const;
+    COMMONAPI_EXPORT std::string getEnv() const;
+    COMMONAPI_EXPORT std::string getHostAddress() const;
 
  private:
     std::shared_ptr<vsomeip::message> message_;

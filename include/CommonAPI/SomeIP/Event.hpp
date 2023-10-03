@@ -115,8 +115,7 @@ protected:
         proxy_.removeEventHandler(serviceId_, instanceId_, eventgroupId_, eventId_, handler_.get(), major, minor);
     }
 
-    virtual void onListenerRemoved(const Listener&) {
-
+    virtual void onListenerRemoved(const Listener&, const Subscription) {
     }
 
     template <size_t ... Indices_>
@@ -152,7 +151,8 @@ protected:
                 }
             }
         } else {
-            COMMONAPI_ERROR("CommonAPI::SomeIP::Event: deserialization failed!");
+            COMMONAPI_ERROR("CommonAPI::SomeIP::Event: deserialization failed! [",
+                    std::hex, serviceId_, ".", instanceId_, ".", eventId_, "]");
         }
     }
 

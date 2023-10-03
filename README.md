@@ -2,7 +2,6 @@
 
 ##### Copyright
 Copyright (C) 2016-2020, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
-Copyright (C) 2016-2020, GENIVI Alliance, Inc.
 
 This file is part of GENIVI Project IPC Common API C++.
 Contributions are licensed to the GENIVI Alliance under one or more Contribution License Agreements or MPL 2.0.

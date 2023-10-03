@@ -10,10 +10,11 @@
 #ifndef COMMONAPI_SOMEIP_WATCH_HPP_
 #define COMMONAPI_SOMEIP_WATCH_HPP_
 
-#include <memory>
-#include <queue>
-#include <mutex>
+#include <condition_variable>
 #include <functional>
+#include <memory>
+#include <mutex>
+#include <queue>
 
 #include <vsomeip/application.hpp>
 
@@ -27,8 +28,9 @@ namespace SomeIP {
 class Connection;
 struct QueueEntry;
 
-class Watch : public CommonAPI::Watch {
- public:
+class Watch
+        : public CommonAPI::Watch {
+public:
 
     Watch(const std::shared_ptr<Connection>& _connection);
 
@@ -64,6 +66,7 @@ private:
 #else
     int eventFd_;
 #endif
+    void supervise();
 
     pollfd pollFileDescriptor_;
     std::vector<CommonAPI::DispatchSource*> dependentDispatchSources_;
@@ -81,6 +84,17 @@ private:
     const std::uint64_t eventFdValue_;
 
 #endif
+
+    std::mutex lastProcessingMutex_;
+    std::chrono::steady_clock::time_point lastProcessing_;
+
+    std::shared_ptr<std::thread> supervisor_;
+    bool is_supervising_;
+    std::mutex superviseMutex_;
+    std::condition_variable superviseCondition_;
+
+    std::int64_t max_processing_time_;
+    std::size_t max_queue_size_;
 };
 
 } // namespace IntraP

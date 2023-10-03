@@ -1,6 +1,38 @@
 Changes
 =======
 
+v3.2.3-r8
+- Changed level logs from warning to info when address_aliasing is activated
+- Fix incorrect timings in logs
+- vSomeIP Security: Update vsomeip_sec
+- Use steady_clock instead of high_resolution_clock
+- Extend SomeIP::ClientId interface to be more flexible when creating instances
+- Outputstream: Fix endianness issues when writing array lengths
+
+v3.2.3-r7
+- Linux: avoid static initialization of std::mutex.
+- Changed the default width of a serialized enumeration from 
+  "backing type width" to 1 byte.
+
+v3.2.3
+- Updated the subscriptionMutex_ to a recursive_mutex.
+- Added OSS information for RSE.
+- Fixed open source compliance issues.
+- Ensure cleanup- and detach-thread do not attempt to join
+  themself.
+- Removed GENIVI copyright line
+- Extended error message on event deserialization error.
+- Implemented correct sending/receiving of boolean values.
+- Initialize lastProcessing_ time
+- Update android build files
+- Array of uint8_t: Check remaining bytes before calling vector::assign.
+- Add method to convert from capi client to someipclient.
+- Fix Address overwriting
+
+v3.2.2
+- Adapt to CommonAPI 3.2.2
+- Added main loop supervisor
+
 v3.2.0
 - Adapt to CommonAPI v3.2.0
 

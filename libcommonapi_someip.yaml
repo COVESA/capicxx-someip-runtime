@@ -1,0 +1,6 @@
+- name: libcommonapi_someip
+ version: 3.2.3
+ vendor: Lynx Team
+ license:
+  concluded: CLOSED and MPLv2
+  declared: MPLv2
