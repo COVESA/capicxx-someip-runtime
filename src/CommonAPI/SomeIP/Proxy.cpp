@@ -9,9 +9,10 @@
 #include <CommonAPI/Types.hpp>
 #include <CommonAPI/Utils.hpp>
 #include <CommonAPI/SomeIP/Proxy.hpp>
+#include <CommonAPI/SomeIP/Configuration.hpp>
 #include <CommonAPI/SomeIP/Connection.hpp>
 #include <CommonAPI/SomeIP/Factory.hpp>
-#include <CommonAPI/SomeIP/AddressTranslator.hpp>
+//#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -253,7 +254,7 @@ Proxy::Proxy(const Address &_address,
              const std::shared_ptr<ProxyConnection> &connection) :
         ProxyBase(connection),
         address_(_address),
-        alias_(AddressTranslator::get()->getAddressAlias(_address)),
+        alias_(Configuration::get()->getAddressAlias(_address)),
         proxyStatusEvent_(this),
         availabilityStatus_(AvailabilityStatus::UNKNOWN),
         availabilityHandlerId_(0),

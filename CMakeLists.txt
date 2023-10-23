@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 2)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 0)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 3)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -116,16 +116,16 @@ endforeach ()
 ###################################################################################################
 
 if ("${USE_INSTALLED_COMMONAPI}" STREQUAL "ON")
-    FIND_PACKAGE(CommonAPI 3.2.0 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
+    FIND_PACKAGE(CommonAPI 3.2 REQUIRED CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 else()
-    FIND_PACKAGE(CommonAPI 3.2.0 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
+    FIND_PACKAGE(CommonAPI 3.2 REQUIRED CONFIG NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH)
 endif()
 
 message(STATUS "CommonAPI_CONSIDERED_CONFIGS: ${CommonAPI_CONSIDERED_CONFIGS}")
 message(STATUS "COMMONAPI_INCLUDE_DIRS: ${COMMONAPI_INCLUDE_DIRS}")
 message(STATUS "CommonAPI Version: ${CommonAPI_VERSION}")
 
-find_package (vsomeip3 3.1.0 REQUIRED)
+find_package (vsomeip3 3.2.0 REQUIRED)
 message(STATUS "Using vsomeip3 - v${vsomeip3_VERSION}")
 
 include_directories (
@@ -141,7 +141,10 @@ list (SORT CommonAPI-SomeIP_SRC)
 # CommonAPI
 add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
-target_link_libraries (CommonAPI-SomeIP CommonAPI ${VSOMEIP_LIBRARIES})
+target_include_directories(CommonAPI-SomeIP INTERFACE
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>)
+target_link_libraries(CommonAPI-SomeIP PUBLIC CommonAPI ${VSOMEIP_LIBRARIES})
 
 if (MSVC)
     target_link_libraries(CommonAPI-SomeIP ws2_32 Rpcrt4)
@@ -178,24 +181,15 @@ export (PACKAGE CommonAPI-SomeIP)
 # Create the CommonAPI-SomeIPConfig.cmake and CommonAPI-SomeIPConfigVersion files
 file (RELATIVE_PATH REL_INCLUDE_DIR "${ABSOLUTE_INSTALL_CMAKE_DIR}" "${ABSOLUTE_INSTALL_INCLUDE_DIR}")
 
-# ... for the build tree
-set (CONF_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/include")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfig.cmake.in
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfig.cmake" @ONLY)
-
-# ... for the install tree
-set (CONF_INCLUDE_DIRS "\${COMMONAPI_SOMEIP_CMAKE_DIR}/${REL_INCLUDE_DIR}")
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfig.cmake.in
-    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CommonAPI-SomeIPConfig.cmake" @ONLY)
-
-# ... for both
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/CommonAPI-SomeIPConfigVersion.cmake.in
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfigVersion.cmake" @ONLY)
 
 # Install the CommonAPI-SomeIPConfig.cmake and CommonAPI-SomeIPConfigVersion.cmake
 install (
     FILES
-    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CommonAPI-SomeIPConfig.cmake"
+    "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfig.cmake"
     "${PROJECT_BINARY_DIR}/CommonAPI-SomeIPConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}"
 )
@@ -211,6 +205,10 @@ install (
 if(NOT WIN32)
         configure_file(CommonAPI-SomeIP.pc.in ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc @ONLY)
         install(FILES ${PROJECT_BINARY_DIR}/CommonAPI-SomeIP.pc DESTINATION lib/pkgconfig)
+
+        # force all use of std::mutex and std::recursive_mutex to use runtime init
+        # instead of static initialization so mutexes can be hooked to enable PI as needed
+        add_definitions(-D_GTHREAD_USE_MUTEX_INIT_FUNC -D_GTHREAD_USE_RECURSIVE_MUTEX_INIT_FUNC)
 endif()
 
 ##############################################################################

@@ -1,11 +1,11 @@
 ### CommonAPI C++ SOME/IP Runtime
 
 ##### Copyright
-Copyright (C) 2016-2020, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
-Copyright (C) 2016-2020, GENIVI Alliance, Inc.
+Copyright (C) 2016-2023, Bayerische Motoren Werke Aktiengesellschaft (BMW AG).
+Copyright (C) 2016-2023, COVESA
 
-This file is part of GENIVI Project IPC Common API C++.
-Contributions are licensed to the GENIVI Alliance under one or more Contribution License Agreements or MPL 2.0.
+This file is part of COVESA Project IPC Common API C++.
+Contributions are licensed to the COVESA under one or more Contribution License Agreements or MPL 2.0.
 
 ##### License
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
@@ -14,7 +14,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 The user guide can be found in the documentation directory of the CommonAPI-SomeIP-Tools project as AsciiDoc document. A pdf version can be found at https://github.com/GENIVI/capicxx-someip-tools/releases.
 
 ##### Further information
-https://genivi.github.io/capicxx-core-tools/
+https://covesa.github.io/capicxx-core-tools/
 
 ##### Build Instructions for Linux
 

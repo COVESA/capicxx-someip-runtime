@@ -30,7 +30,13 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ClientId : public CommonAPI::ClientId{
     friend struct std::hash< ClientId >;
 
 public:
-    COMMONAPI_EXPORT ClientId(client_id_t client_id, uid_t _uid, gid_t _gid);
+    COMMONAPI_EXPORT ClientId();
+    COMMONAPI_EXPORT ClientId(client_id_t client_id,
+            const sec_client_t *_sec_client,
+            const std::string &_env);
+    COMMONAPI_EXPORT ClientId(client_id_t client_id,
+            const sec_client_t &_sec_client,
+            const std::string &_env);
     COMMONAPI_EXPORT virtual ~ClientId();
 
     COMMONAPI_EXPORT bool operator==(CommonAPI::ClientId& clientIdToCompare);
@@ -40,11 +46,17 @@ public:
     COMMONAPI_EXPORT client_id_t getClientId();
     COMMONAPI_EXPORT uid_t getUid() const;
     COMMONAPI_EXPORT gid_t getGid() const;
+    COMMONAPI_EXPORT std::string getEnv() const;
+    COMMONAPI_EXPORT std::string getHostAddress() const;
+
+    COMMONAPI_EXPORT static std::shared_ptr<ClientId> getSomeIPClient(const std::shared_ptr<CommonAPI::ClientId> _client);
 
 protected:
     client_id_t client_id_;
     uid_t uid_;
     gid_t gid_;
+    std::string env_;
+    std::string hostAddress_;
 };
 
 } // namespace SomeIP

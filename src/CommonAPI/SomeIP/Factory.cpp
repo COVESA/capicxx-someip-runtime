@@ -18,6 +18,7 @@ namespace SomeIP {
 INITIALIZER(FactoryInit) {
     Factory::runtime_ = Runtime::get();
     Factory::runtime_.lock()->registerFactory("someip", Factory::get());
+    Configuration::load();
 }
 
 DEINITIALIZER(FactoryDeinit) {
@@ -297,8 +298,8 @@ Factory::unregisterStub(const std::string &_domain,
 
     if (adapterResult == services_.end()) {
         servicesMutex_.unlock();
-        COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface,
-                ":", _instance, "\" failed (Not registered).");
+        COMMONAPI_WARNING("Deregistering stub for \"", _domain, ":", _interface,
+                ":", _instance, "\" failed (Not registered or already unregistered).");
         return false;
     }
 

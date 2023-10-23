@@ -307,6 +307,8 @@ public:
             }
         } else {
             itsSize = arrayMaxLength;
+            if (itsSize > remaining_)
+                errorOccurred_ = true;
         }
 
         // Reset target
