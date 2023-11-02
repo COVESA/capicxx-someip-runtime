@@ -29,6 +29,7 @@ Use CMake to build the CommonAPI SOME/IP runtime library. We assume that your so
 ```bash
 $ cd common-api-someip-runtime
 $ mkdir build
+$ cd build
 $ cmake -D USE_INSTALLED_COMMONAPI=ON -D CMAKE_INSTALL_PREFIX=/usr/local ..
 $ make
 $ make install
