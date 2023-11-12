@@ -4,6 +4,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <typeinfo>
+#include <limits>
 
 #include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/ClientId.hpp>
@@ -26,16 +27,16 @@ namespace CommonAPI {
 namespace SomeIP {
 
 ClientId::ClientId()
-        : client_id_ {0xffff},
-          uid_ {0xffffffff},
-          gid_ {0xffffffff} {
+        : client_id_ {std::numeric_limits<decltype(client_id_)>::max()},
+          uid_ {std::numeric_limits<decltype(uid_)>::max()},
+          gid_ {std::numeric_limits<decltype(gid_)>::max()} {
 }
 
 ClientId::ClientId(client_id_t _client,
         const vsomeip_sec_client_t *_sec_client, const std::string &_env)
     : client_id_ {_client},
-      uid_ {_sec_client ? _sec_client->user : 0xffffffff},
-      gid_ {_sec_client ? _sec_client->group : 0xffffffff},
+      uid_ {_sec_client ? _sec_client->user : std::numeric_limits<decltype(uid_)>::max()},
+      gid_ {_sec_client ? _sec_client->group : std::numeric_limits<decltype(gid_)>::max()},
       env_(_env) {
 
     if (_sec_client)
