@@ -26,6 +26,9 @@ message(STATUS "USE_FILE is set to value: ${USE_FILE}")
 OPTION(USE_CONSOLE "Set to OFF to disable console logging" OFF )
 message(STATUS "USE_CONSOLE is set to value: ${USE_CONSOLE}")
 
+OPTION(BUILD_SHARED_LIBS "Set to OFF to build static libraries" ON )
+message(STATUS "BUILD_SHARED_LIBS is set to value: ${BUILD_SHARED_LIBS}")
+
 SET(DEFAULT_SEND_TIMEOUT "5000" CACHE STRING "default send timeout")
 message(STATUS "DEFAULT_SEND_TIMEOUT is set to value: ${DEFAULT_SEND_TIMEOUT} ms")
 
@@ -139,7 +142,7 @@ file (GLOB CommonAPI-SomeIP_SRC "src/CommonAPI/SomeIP/*.cpp")
 list (SORT CommonAPI-SomeIP_SRC)
 
 # CommonAPI
-add_library (CommonAPI-SomeIP SHARED ${CommonAPI-SomeIP_SRC})
+add_library (CommonAPI-SomeIP ${CommonAPI-SomeIP_SRC})
 set_target_properties (CommonAPI-SomeIP PROPERTIES VERSION ${COMPONENT_VERSION} SOVERSION ${COMPONENT_VERSION})
 target_include_directories(CommonAPI-SomeIP INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
