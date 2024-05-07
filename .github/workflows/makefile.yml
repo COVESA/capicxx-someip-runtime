@@ -54,7 +54,7 @@ jobs:
 
       - name: "Build vsomeip"
         run: |
-          cmake -S vsomeip -B vsomeip -D GTEST_ROOT=/usr/src/googletest -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
+          cmake -S vsomeip -B vsomeip -D GTEST_ROOT=/usr/src/googletest -D BOOST_ROOT=/home/runner/boost/boost/ -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
           cmake --build vsomeip
           cmake --install vsomeip --strip
 
