@@ -1,0 +1,54 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  build:
+    runs-on: [ubuntu-22.04]
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v3
+
+      - name: "Checkout capicxx-core-runtime"
+        uses: actions/checkout@v3
+        with:
+          repository: COVESA/capicxx-core-runtime
+          path: "capicxx-core-runtime"
+
+      - name: "Checkout vsomeip"
+        uses: actions/checkout@v3
+        with:
+          repository: COVESA/vsomeip
+          path: "vsomeip"
+
+      - name: "Install dbus and googletest"
+        run: |
+          sudo apt-get install libgtest-dev
+          cd /usr/src/gtest
+          sudo cmake CMakeLists.txt
+          sudo make
+          sudo cp lib/*.a /usr/lib
+          sudo ln -s /usr/lib/libgtest.a /usr/local/lib/libgtest.a
+          sudo ln -s /usr/lib/libgtest_main.a /usr/local/lib/libgtest_main.a
+
+      - name: "Build capicxx-core-runtime"
+        run: |
+          cmake -S capicxx-core-runtime -B build-core-runtime -D CMAKE_INSTALL_PREFIX=install
+          cmake --build build-core-runtime --target install
+
+      - name: "Build vsomeip"
+        run: |
+          cmake -S vsomeip -B vsomeip -D GTEST_ROOT=/usr/src/googletest -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
+          cmake --build vsomeip
+          cmake --install vsomeip --strip
+
+      - name: "Build capicxx-someip-runtime"
+        run: |
+          cmake -S . -B build-someip-runtime -D GTEST_ROOT=/usr/src/googletest -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
+          cmake --build build-someip-runtime
+          cmake --install build-someip-runtime --strip
