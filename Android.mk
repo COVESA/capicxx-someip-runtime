@@ -2,7 +2,7 @@
 # yet implemented for soong as of 12/16/2016
 
 LOCAL_PATH := $(call my-dir)
-
+ 
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libcommonapi_someip_dlt
