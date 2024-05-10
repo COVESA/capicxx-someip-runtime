@@ -7,39 +7,31 @@ on:
     branches: ["master"]
 
 jobs:
-  build:
+  build_on_ubuntu_22_04:
     runs-on: [ubuntu-22.04]
 
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: "Checkout capicxx-core-runtime"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: COVESA/capicxx-core-runtime
           path: "capicxx-core-runtime"
 
       - name: "Checkout vsomeip"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: COVESA/vsomeip
           path: "vsomeip"
 
-      - name: "Install googletest"
-        run: |
-          sudo apt-get install libgtest-dev
-          cd /usr/src/gtest
-          sudo cmake CMakeLists.txt
-          sudo make
-          sudo cp lib/*.a /usr/lib
-          sudo ln -s /usr/lib/libgtest.a /usr/local/lib/libgtest.a
-          sudo ln -s /usr/lib/libgtest_main.a /usr/local/lib/libgtest_main.a
-
-      - name: "Build capicxx-core-runtime"
-        run: |
-          cmake -S capicxx-core-runtime -B build-core-runtime -D CMAKE_INSTALL_PREFIX=install
-          cmake --build build-core-runtime --target install
+      - name: "Checkout googletest"
+        uses: actions/checkout@v4
+        with:
+          repository: google/googletest
+          ref: v1.14.0
+          path: "googletest"
 
       - name: Ubuntu - Install boost 1.83.0 with gcc and x86
         uses: MarkusJx/install-boost@v2.4.4
@@ -52,9 +44,14 @@ jobs:
           arch: x86
           cache: true
 
+      - name: "Build capicxx-core-runtime"
+        run: |
+          cmake -S capicxx-core-runtime -B build-core-runtime -D CMAKE_INSTALL_PREFIX=install
+          cmake --build build-core-runtime --target install
+
       - name: "Build vsomeip"
         run: |
-          cmake -S vsomeip -B vsomeip -D GTEST_ROOT=/usr/src/googletest -D BOOST_ROOT=/home/runner/boost/boost/ -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
+          cmake -S vsomeip -B vsomeip -D GTEST_ROOT=${{ github.workspace }}/googletest -D BOOST_ROOT=/home/runner/boost/boost/ -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
           cmake --build vsomeip
           cmake --install vsomeip --strip
 
@@ -62,4 +59,55 @@ jobs:
         run: |
           cmake -S . -B build-someip-runtime -D GTEST_ROOT=/usr/src/googletest -D CMAKE_PREFIX_PATH=install -D CMAKE_INSTALL_PREFIX=install
           cmake --build build-someip-runtime
-          cmake --install build-someip-runtime --strip
+
+  build_on_windows_latest:
+    runs-on: windows-latest
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Checkout capicxx-core-runtime"
+        uses: actions/checkout@v4
+        with:
+          repository: COVESA/capicxx-core-runtime
+          path: "capicxx-core-runtime"
+
+      - name: "Checkout vsomeip"
+        uses: actions/checkout@v4
+        with:
+          repository: COVESA/vsomeip
+          path: "vsomeip"
+
+      - name: "Checkout googletest"
+        uses: actions/checkout@v4
+        with:
+          repository: google/googletest
+          ref: v1.14.0
+          path: "googletest"
+
+      - name: Windows - Install boost 1.83.0 with gcc and x86
+        uses: MarkusJx/install-boost@v2.4.4
+        id: windows-gcc-1_83-x86
+        with:
+          boost_version: 1.83.0
+          platform: windows
+          boost_install_dir: C:\runner
+          toolset: msvc
+          arch: x86
+          cache: true
+
+      - name: "Build capicxx-core-runtime"
+        run: |
+          cmake -S capicxx-core-runtime -B build-core-runtime -D BOOST_ROOT=C:\runner\boost -DCMAKE_INSTALL_PREFIX=${{ runner.workspace }}\install
+          cmake --build build-core-runtime --target install
+
+      - name: "Build vsomeip"
+        run: |
+          cmake -S vsomeip -B build-vsomeip -D GTEST_ROOT=${{ github.workspace }}\googletest -D BOOST_ROOT=C:\runner\boost -D CMAKE_INSTALL_PREFIX=${{ runner.workspace }}\install
+          cmake --build build-vsomeip --target install
+
+      - name: "Build capicxx-someip-runtime"
+        run: |
+          cmake -B build-someip-runtime -D GTEST_ROOT=${{ github.workspace }}\googletest -D BOOST_ROOT=C:\runner\boost -D CMAKE_PREFIX_PATH=${{ runner.workspace }}\install .
+          cmake --build build-someip-runtime
