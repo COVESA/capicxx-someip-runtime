@@ -568,7 +568,11 @@ public:
                 byte_t raw[sizeof(Type_)];
             } value;
             value.typed = _value;
+#ifndef _WIN32
             if ((__BYTE_ORDER == __LITTLE_ENDIAN) != isLittleEndian_) {
+#else
+            if (!isLittleEndian_) {
+#endif
                 byte_t reordered[sizeof(Type_)];
                 byte_t *source = &value.raw[sizeof(Type_) - 1];
                 byte_t *target = reordered;
