@@ -323,6 +323,29 @@ public:
         return (*this);
     }
 
+    template<typename ElementType_,
+        typename std::enable_if<(std::is_same<int8_t, ElementType_>::value ||
+                                 std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT InputStream &readValue(std::vector<ElementType_> &_value,
+            const EmptyDeployment *_depl) {
+        bitAlign();
+
+        (void)_depl;
+
+        uint32_t itsSize;
+
+        _value.clear();
+
+        errorOccurred_ = _readBitValue(itsSize, 32, false);
+
+        if (!hasError()) {
+            ElementType_ *base = reinterpret_cast<ElementType_ *>(_readRaw(itsSize));
+            _value.assign(base, base + itsSize);
+        }
+
+        return (*this);
+    }
+
     template<typename ElementType_, typename ElementDepl_,
         typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
                                  !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
@@ -378,6 +401,42 @@ public:
             }
 
 
+        }
+
+        return (*this);
+    }
+
+    template<typename ElementType_,
+        typename std::enable_if<(!std::is_same<int8_t, ElementType_>::value &&
+                                 !std::is_same<uint8_t, ElementType_>::value), int>::type = 0>
+    COMMONAPI_EXPORT InputStream &readValue(std::vector<ElementType_> &_value,
+                           const EmptyDeployment *_depl) {
+        bitAlign();
+
+        (void)_depl;
+
+        uint32_t itsSize;
+
+        _value.clear();
+
+        errorOccurred_ = _readBitValue(itsSize, 32, false);
+
+        while (itsSize > 0)
+        {
+            size_t remainingBeforeRead = remaining_;
+            ElementType_ itsElement;
+            readValue(itsElement, static_cast<EmptyDeployment *>(nullptr));
+            if (hasError()) {
+                break;
+            }
+
+            _value.push_back(std::move(itsElement));
+
+            itsSize -= uint32_t(remainingBeforeRead - remaining_);
+        }
+
+        if (itsSize != 0) {
+            errorOccurred_ = true;
         }
 
         return (*this);
