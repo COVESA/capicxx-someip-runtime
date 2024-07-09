@@ -7,6 +7,8 @@ cmake_minimum_required (VERSION 2.8)
 
 project (CommonAPI-SomeIP)
 
+set(CMAKE_CXX_STANDARD 17)
+
 set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
