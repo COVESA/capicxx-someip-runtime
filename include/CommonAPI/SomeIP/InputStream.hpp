@@ -542,7 +542,6 @@ public:
     template<typename Type_>
     COMMONAPI_EXPORT bool _readBitValue(Type_ &_value, uint8_t _bits, bool _isSigned) {
         bool isError(false);
-        bool isLittleEndian = static_cast<bool>(buffer_[0]);
 
         union {
             Type_ typed_;
@@ -559,7 +558,7 @@ public:
         } else {
             if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3) && current_ != NULL) {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                if (isLittleEndian) {
+                if (isLittleEndian_) {
                     std::memcpy(value.raw_, current_, sizeof(Type_));
                     current_ += sizeof(Type_);
                 } else {
@@ -569,7 +568,7 @@ public:
                     }
                 }
 #else
-                if (isLittleEndian) {
+                if (isLittleEndian_) {
                     byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_)-1]);
                     for (size_t i = 0; i < sizeof(Type_); ++i) {
                         *target-- = *current_++;
@@ -627,11 +626,10 @@ public:
                     }
                 }
 
-// Set the target (TODO: Add isLittleEndian_ member and use it here)
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                const std::size_t targetIndex = ((sizeof(Type_) == 1) || isLittleEndian) ? 0 : sizeof(Type_) - 1;
+                const std::size_t targetIndex = ((sizeof(Type_) == 1) || isLittleEndian_) ? 0 : sizeof(Type_) - 1;
 #else
-                const std::size_t targetIndex = ((sizeof(Type_) > 1) && isLittleEndian) ? sizeof(Type_) - 1 : 0;
+                const std::size_t targetIndex = ((sizeof(Type_) > 1) && isLittleEndian_) ? sizeof(Type_) - 1 : 0;
 #endif
                 byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[targetIndex]);
 
@@ -677,12 +675,12 @@ public:
                             (*target) |= itsCurrentByte;
                         }
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                        if (isLittleEndian)
+                        if (isLittleEndian_)
                             target++;
                         else
                             target--;
 #else
-                        if (isLittleEndian)
+                        if (isLittleEndian_)
                             target--;
                         else
                             target++;
@@ -723,7 +721,7 @@ private:
     Message message_;
     bool errorOccurred_;
 
-    std::vector<byte_t> buffer_; // used for handling "Little Endian" messages
+    bool isLittleEndian_; // used for handling "Little Endian" messages
 };
 
 } // namespace SomeIP

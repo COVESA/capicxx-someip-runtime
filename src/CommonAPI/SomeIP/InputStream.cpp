@@ -24,8 +24,9 @@ InputStream::InputStream(const CommonAPI::SomeIP::Message &_message,
       currentBit_(0),
       remaining_(_message.getBodyLength()),
       message_(_message),
-      errorOccurred_(false) {
-    buffer_.push_back(static_cast<byte_t>(_isLittleEndian));
+      errorOccurred_(false),
+      isLittleEndian_(_isLittleEndian)
+{
 }
 
 InputStream::~InputStream() {}
