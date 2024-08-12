@@ -627,19 +627,13 @@ public:
                     }
                 }
 
-                // Set the target (TODO: Add isLittleEndian_ member and use it here)
-                byte_t *target(nullptr);
+// Set the target (TODO: Add isLittleEndian_ member and use it here)
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-                if (isLittleEndian)
-                    target = reinterpret_cast<byte_t *>(&value.raw_[0]);
-                else
-                    target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_) - 1]);
+                const std::size_t targetIndex = ((sizeof(Type_) == 1) || isLittleEndian) ? 0 : sizeof(Type_) - 1;
 #else
-                if (isLittleEndian)
-                    target = reinterpret_cast<byte_t *>(&value.raw_[sizeof(Type_) - 1]);
-                else
-                    target = reinterpret_cast<byte_t *>(&value.raw_[0]);
+                const std::size_t targetIndex = ((sizeof(Type_) > 1) && isLittleEndian) ? sizeof(Type_) - 1 : 0;
 #endif
+                byte_t *target = reinterpret_cast<byte_t *>(&value.raw_[targetIndex]);
 
                 uint8_t writePosition = 0;
                 while (_bits > 0) {
