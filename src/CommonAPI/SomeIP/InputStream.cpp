@@ -319,9 +319,7 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
     uint32_t byteBufferMaxLength = (_depl ? _depl->byteBufferMaxLength_ : 0xFFFFFFFF);
     uint8_t byteBufferLengthWidth = (_depl ? _depl->byteBufferLengthWidth_ : 4);
 
-    uint32_t itsSize; // this affects how many bytes are read
-    uint32_t maxSize; // this affects how many bytes are stored
-
+    uint32_t itsSize{0}; // this affects how many bytes are read
     // Read array size
     if (byteBufferLengthWidth != 0)
         readValue(itsSize, byteBufferLengthWidth, true);
@@ -331,12 +329,6 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
     // Reset target
     _value.clear();
 
-    // check for cutoff
-    if (0 != byteBufferMaxLength && itsSize > byteBufferMaxLength)
-        maxSize = byteBufferMaxLength;
-    else
-        maxSize = itsSize;
-
     if ((byteBufferLengthWidth != 0 && itsSize < byteBufferMinLength)
             || itsSize > remaining_) {
         errorOccurred_ = true;
@@ -345,6 +337,8 @@ InputStream& InputStream::readValue(ByteBuffer &_value, const ByteBufferDeployme
     // Read elements, if reading size has been successful
     if (!hasError()) {
         byte_t *base = _readRaw(itsSize);
+        // check for cutoff, this affects how many bytes are stored
+        const uint32_t maxSize = (0 != byteBufferMaxLength && itsSize > byteBufferMaxLength) ? byteBufferMaxLength : itsSize;
         _value.assign(base, base+maxSize);
     }
 
