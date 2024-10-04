@@ -192,6 +192,13 @@ Factory::registerStub(
         }
 
         CommonAPI::Address address(_domain, itsInterface, _instance);
+
+        if (isRegisteredService(address.getAddress())) {
+            COMMONAPI_ERROR("Registering stub for \"", _domain, ":", _interface, ":", _instance,
+                            "\" failed (Already registered).");
+            return false;
+        }
+
         Address someipAddress;
         AddressTranslator::get()->translate(address, someipAddress);
 
@@ -238,6 +245,13 @@ Factory::registerStub(
         }
 
         CommonAPI::Address address(_domain, itsInterface, _instance);
+
+        if (isRegisteredService(address.getAddress())) {
+            COMMONAPI_ERROR("Registering stub for \"", _domain, ":", _interface, ":", _instance,
+                            "\" failed (Already registered).");
+            return false;
+        }
+
         Address someipAddress;
         if (AddressTranslator::get()->translate(address, someipAddress)) {
             std::shared_ptr<Connection> itsConnection = getConnection(_context);
@@ -291,13 +305,12 @@ Factory::unregisterStub(const std::string &_domain,
     COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface, ":",
             _instance, "\"");
 
-    servicesMutex_.lock();
+    std::unique_lock<std::mutex> itsLock(servicesMutex_);
     CommonAPI::Address address(_domain, _interface, _instance);
 
     const auto &adapterResult = services_.find(address.getAddress());
 
     if (adapterResult == services_.end()) {
-        servicesMutex_.unlock();
         COMMONAPI_WARNING("Deregistering stub for \"", _domain, ":", _interface,
                 ":", _instance, "\" failed (Not registered or already unregistered).");
         return false;
@@ -311,13 +324,12 @@ Factory::unregisterStub(const std::string &_domain,
     stubManager->unregisterStubAdapter(adapter);
 
     if(!services_.erase(address.getAddress())) {
-        servicesMutex_.unlock();
         COMMONAPI_INFO("Deregistering stub for \"", _domain, ":", _interface,
                 ":", _instance, "\" failed (Removal failed).");
         return false;
     }
 
-    servicesMutex_.unlock();
+    itsLock.unlock();
 
     decrementConnection(connection);
 
@@ -352,6 +364,7 @@ Factory::createStubAdapter(
 
 bool
 Factory::isRegisteredService(const std::string &_address) {
+    std::lock_guard<std::mutex> itsLock(servicesMutex_);
     auto serviceIterator = services_.find(_address);
     if (serviceIterator != services_.end()) {
         return true;

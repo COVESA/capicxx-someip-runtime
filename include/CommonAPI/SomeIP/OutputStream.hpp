@@ -568,7 +568,7 @@ public:
                 byte_t raw[sizeof(Type_)];
             } value;
             value.typed = _value;
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__ANDROID__)
             if ((__BYTE_ORDER == __LITTLE_ENDIAN) != isLittleEndian_) {
 #else
             if (!isLittleEndian_) {

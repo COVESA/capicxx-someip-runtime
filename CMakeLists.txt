@@ -11,7 +11,7 @@ set (CMAKE_VERBOSE_MAKEFILE off)
 
 set (LIBCOMMONAPI_SOMEIP_MAJOR_VERSION 3)
 set (LIBCOMMONAPI_SOMEIP_MINOR_VERSION 2)
-set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 3)
+set (LIBCOMMONAPI_SOMEIP_PATCH_VERSION 4)
 
 message(STATUS "Project name: ${PROJECT_NAME}")
 
@@ -66,7 +66,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 -D_CRT_SECURE_NO_WARNINGS /wd4503")
 link_directories(${Boost_LIBRARY_DIR})
 else()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread -fvisibility=hidden")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -Wextra -Wformat -Wformat-security -Wconversion -fexceptions -fstrict-aliasing -fstack-protector -fasynchronous-unwind-tables -fno-omit-frame-pointer -DCOMMONAPI_INTERNAL_COMPILATION -D_GLIBCXX_USE_NANOSLEEP -DBOOST_LOG_DYN_LINK -pthread -fvisibility=hidden")
 endif()
 
 SET(MAX_LOG_LEVEL "DEBUG" CACHE STRING "maximum log level")
@@ -214,3 +214,13 @@ endif()
 ##############################################################################
 # maintainer-clean
 add_custom_target(maintainer-clean COMMAND rm -rf *)
+
+##############################################################################
+# for debug
+if(MAINLOOP_DID_NOT_PROCESS_MESSAGE_MS_THRESHOLD)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMAINLOOP_DID_NOT_PROCESS_MESSAGE_MS_THRESHOLD")
+endif()
+
+if(MAINLOOP_WATCH_ELEMENTS_SLOW_THRESHOLD)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMAINLOOP_WATCH_ELEMENTS_SLOW_THRESHOLD")
+endif()

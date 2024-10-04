@@ -70,7 +70,6 @@ protected:
         }
 
         virtual void onEventMessage(const Message &_message) {
-            std::lock_guard<std::mutex> itsLock(notificationMutex_);
             if (auto ptr = proxy_.lock()) {
                 event_->handleEventMessage(_message, typename make_sequence<sizeof...(Arguments_)>::type());
             }
@@ -85,7 +84,6 @@ protected:
     private :
         std::weak_ptr<ProxyBase> proxy_;
         Event<Events_, Arguments_ ...>* event_;
-        std::mutex notificationMutex_;
     };
 
     virtual void onFirstListenerAdded(const Listener&) {
@@ -102,6 +100,22 @@ protected:
         {
             std::lock_guard<std::mutex> itsLock(listeners_mutex_);
             listeners_.insert(_subscription);
+        }
+        const std::size_t subscriptionCount = this->getSubscriptionCount();
+        if (subscriptionCount > 1) {
+            std::ostringstream identifiers;
+            identifiers << std::hex << std::setfill('0')
+                << std::setw(4) << serviceId_ << '.'
+                << std::setw(4) << instanceId_ << '.'
+                << std::setw(4) << eventId_;
+
+            COMMONAPI_WARNING(
+                "Detected multiple active subscriptions (",
+                subscriptionCount,
+                ") to the same event: [",
+                identifiers.str(),
+                "]. This is usually unintentional and may lead to poor performance."
+            );
         }
 
         auto major = proxy_.getSomeIpAlias().getMajorVersion();
@@ -121,10 +135,10 @@ protected:
     template <size_t ... Indices_>
     inline void handleEventMessage(const Message &_message,
                                    index_sequence<Indices_...>) {
-
+        std::tuple<Arguments_...> itsArguments {arguments_};
         InputStream InputStream(_message, isLittleEndian_);
         if (SerializableArguments<Arguments_...>::deserialize(
-                InputStream, std::get<Indices_>(arguments_)...)) {
+                InputStream, std::get<Indices_>(itsArguments)...)) {
             if (_message.isInitialValue()) {
                 std::set<Subscription> subscribers;
                 {
@@ -133,21 +147,21 @@ protected:
                     listeners_.clear();
                 }
                 for(auto const &subscription : subscribers) {
-                    if(!_message.isValidCRC()) {
+                    if (!_message.isValidCRC()) {
                         this->notifySpecificError(subscription, CommonAPI::CallStatus::INVALID_VALUE);
                     } else {
-                        this->notifySpecificListener(subscription, std::get<Indices_>(arguments_)...);
+                        this->notifySpecificListener(subscription, std::get<Indices_>(itsArguments)...);
                     }
                 }
             } else {
-                if(!_message.isValidCRC()) {
+                if (!_message.isValidCRC()) {
                     this->notifyErrorListeners(CommonAPI::CallStatus::INVALID_VALUE);
                 } else {
                     {
                         std::lock_guard<std::mutex> itsLock(listeners_mutex_);
                         listeners_.clear();
                     }
-                    this->notifyListeners(std::get<Indices_>(arguments_)...);
+                    this->notifyListeners(std::get<Indices_>(itsArguments)...);
                 }
             }
         } else {
@@ -166,9 +180,9 @@ protected:
     const event_type_e eventType_;
     const reliability_type_e reliabilityType_;
     const bool isLittleEndian_;
-    std::tuple<Arguments_...> arguments_;
     std::mutex listeners_mutex_;
     std::set<Subscription> listeners_;
+    const std::tuple<Arguments_...> arguments_; // the deployments
 };
 
 } // namespace SomeIP

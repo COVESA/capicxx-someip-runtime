@@ -289,8 +289,6 @@ bool Proxy::init() {
     if (!connection)
         return false;
 
-    connection->requestService(alias_);
-
     std::weak_ptr<Proxy> itsProxy = shared_from_this();
     availabilityHandlerId_ = connection->registerAvailabilityHandler(
                                     alias_,
@@ -303,6 +301,9 @@ bool Proxy::init() {
                                               std::placeholders::_5),
                                     itsProxy,
                                     NULL);
+
+    connection->requestService(alias_);
+
     if (connection->isAvailable(alias_)) {
         std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         availabilityStatus_ = AvailabilityStatus::AVAILABLE;
