@@ -338,13 +338,15 @@ void Watch::processQueueEntry(std::shared_ptr<QueueEntry> _queueEntry) {
 }
 
 void Watch::supervise() {
+    std::string applicationName = "<unknown>";
     {
         auto itsConnection = connection_.lock();
         if (itsConnection) {
-            COMMONAPI_INFO("Supervising watch[", itsConnection->getName(), "] --> (",
+            applicationName = itsConnection->getName();
+            COMMONAPI_INFO("Supervising watch[", applicationName, "] --> (",
                 max_processing_time_, ", ", max_queue_size_, ")");
         } else {
-            COMMONAPI_WARNING("Supervising watch[<unknown>] --> (",
+            COMMONAPI_WARNING("Supervising watch[", applicationName, "] --> (",
                         max_processing_time_, ", ", max_queue_size_, ")");
         }
     }
@@ -365,13 +367,28 @@ void Watch::supervise() {
                 itsQueueSize = queue_.size();
             }
 
+#ifdef MAINLOOP_WATCH_ELEMENTS_SLOW_THRESHOLD
+                if (MAINLOOP_WATCH_ELEMENTS_SLOW_THRESHOLD >= itsQueueSize) {
+                    COMMONAPI_WARNING("DEBUG -> Aborting application[", applicationName, "] watch elements threshold defined.");
+                    abort();
+                }
+#endif
+
+#ifdef MAINLOOP_DID_NOT_PROCESS_MESSAGE_MS_THRESHOLD
+                if (MAINLOOP_DID_NOT_PROCESS_MESSAGE_MS_THRESHOLD >= itsDuration.count()) {
+                    COMMONAPI_WARNING("DEBUG -> Aborting application[", applicationName, "] ms threshold defined.");
+                    abort();
+                }
+#endif
+
             if (0 < max_processing_time_
                     && itsDuration.count() > max_processing_time_) {
 
                 std::stringstream itsMessage;
                 itsMessage << "Mainloop did not process a message for "
                         << itsDuration.count() << "ms (#elements="
-                        << itsQueueSize << ")";
+                        << itsQueueSize << ")"
+                        << " Application[" << applicationName << "]";
 
                 COMMONAPI_WARNING(itsMessage.str());
             } else if (0 < max_queue_size_
@@ -380,7 +397,8 @@ void Watch::supervise() {
                 std::stringstream itsMessage;
                 itsMessage << "Mainloop watch contains "
                         << itsQueueSize << " elements."
-                        << " Maybe processing is too slow.";
+                        << " Maybe processing is too slow"
+                        << " Application[" << applicationName << "]";
 
                 COMMONAPI_WARNING(itsMessage.str());
             }

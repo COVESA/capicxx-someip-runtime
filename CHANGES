@@ -1,6 +1,24 @@
 Changes
 =======
 
+v3.2.4
+- Unlock event processing
+- Fix build on Android
+- Call registerAvailabilityHandler before requestService
+- Fix deadlock issue when unregistering services
+- Added github workflow to build in Ubuntu
+- Fix: install boost
+- Build capicxx-someip-runtime on Windows
+
+v3.2.3-r9
+- Fix Copyright & github link in README
+- Fix MethodStubDispatcher template
+- (dev) Warn about multiple subscriptions
+- Improve the CommonAPI-SomeIP Mainloop logs
+- Fix to check for the entry containing a valid Message obj to avoid nullptr
+- Fix Windows build
+- Call registerAvailabilityHandler before requestService
+
 v3.2.3-r8
 - Changed level logs from warning to info when address_aliasing is activated
 - Fix incorrect timings in logs

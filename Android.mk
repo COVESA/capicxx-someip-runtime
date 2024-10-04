@@ -34,8 +34,7 @@ LOCAL_SRC_FILES += \
     src/CommonAPI/SomeIP/Watch.cpp \
 
 LOCAL_C_INCLUDES := \
-    $(LOCAL_PATH)/include \
-    $(LOCAL_PATH)/internal
+    $(LOCAL_PATH)/include 
 
 LOCAL_SHARED_LIBRARIES := \
     libboost_log \

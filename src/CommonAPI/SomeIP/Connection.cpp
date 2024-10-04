@@ -101,8 +101,9 @@ void Connection::handleProxyReceive(const std::shared_ptr<vsomeip::message> &_me
 
         // We must not hold the lock when calling the handlers!
         for (auto handler : handlers) {
-            if(auto itsHandler = handler.second.lock())
+            if(auto itsHandler = handler.second.lock()) {
                 itsHandler->onEventMessage(Message(_message));
+            }
         }
 
         return;

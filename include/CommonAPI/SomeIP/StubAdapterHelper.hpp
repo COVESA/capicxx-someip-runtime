@@ -338,7 +338,7 @@ private:
 
         (_stub.get()->*stubFunctor_)(
             itsClientId,
-            std::move(std::get<InArgIndices_>(in))...
+            std::move(std::get<InArgIndices_>(in).getValue())...
         );
 
            return true;
@@ -405,7 +405,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             auto itsMessage = pending_.find(_call);
-            if (itsMessage != pending_.end()) {
+            if (itsMessage != pending_.end() && itsMessage->second) {
                 Message itsReply = itsMessage->second.createResponseMessage();
                 pending_[_call] = itsReply;
             } else {
@@ -504,7 +504,7 @@ private:
 
         std::lock_guard<std::mutex> lock(mutex_);
         auto reply = pending_.find(_call);
-        if (reply != pending_.end()) {
+        if (reply != pending_.end() && reply->second) {
             if (sizeof...(DeplOutArgs_) > 0) {
                 OutputStream output(reply->second, isLittleEndian_);
                 if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
@@ -600,7 +600,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(this->mutex_);
             auto itsMessage = this->pending_.find(_call);
-            if (itsMessage != this->pending_.end()) {
+            if (itsMessage != this->pending_.end() && itsMessage->second) {
                 // TODO create error response message
                 Message itsReply = itsMessage->second.createResponseMessage();
                 this->pending_[_call] = itsReply;
@@ -689,7 +689,7 @@ private:
 
         std::lock_guard<std::mutex> lock(this->mutex_);
         auto itsReply = this->pending_.find(_call);
-        if (itsReply != this->pending_.end()) {
+        if (itsReply != this->pending_.end() && itsReply->second) {
             if (sizeof...(DeplOutArgs_) > 0) {
                 OutputStream output(itsReply->second, this->isLittleEndian_);
                 if (!SerializableArguments<CommonAPI::Deployable<OutArgs_, DeplOutArgs_>...>::serialize(
