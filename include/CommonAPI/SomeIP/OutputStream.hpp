@@ -266,7 +266,7 @@ public:
                 errorOccurred_ = true;
             } else {
                 for(size_t i = 0; i < paddingCount; i++) {
-                    _writeValue('\0', 8);
+                    _writeValue('\0', 1);
                 }
             }
         }
