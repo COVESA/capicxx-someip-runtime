@@ -71,7 +71,7 @@ public:
     COMMONAPI_EXPORT virtual const Address &getSomeIpAlias() const;
 
 private:
-    COMMONAPI_EXPORT Proxy(const Proxy&) = delete;
+    Proxy(const Proxy&) = delete;
 
     COMMONAPI_EXPORT void onServiceInstanceStatus(std::shared_ptr<Proxy> _proxy,
                                                          uint16_t serviceId,

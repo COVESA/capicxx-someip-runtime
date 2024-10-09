@@ -493,7 +493,7 @@ public:
      * @param message the #Message from which data should be read.
      */
     COMMONAPI_EXPORT InputStream(const Message &_message, bool _isLittleEndian);
-    COMMONAPI_EXPORT InputStream(const InputStream &_stream) = delete;
+    InputStream(const InputStream &_stream) = delete;
 
     /**
      * Destructor; does not call the destructor of the referred #Message. Make sure to maintain a reference to the
