@@ -149,9 +149,7 @@ public:
                  break;
              }
          } else {
-             // Default enumeration width is 1 Byte
-             uint8_t value = static_cast<uint8_t>(_value);
-             writeValue(value, static_cast<EmptyDeployment *>(nullptr));
+             writeValue(_value.value_, static_cast<EmptyDeployment *>(nullptr));
          }
          return (*this);
     }
