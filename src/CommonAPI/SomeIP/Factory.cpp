@@ -16,18 +16,9 @@ namespace CommonAPI {
 namespace SomeIP {
 
 INITIALIZER(FactoryInit) {
-    Factory::runtime_ = Runtime::get();
-    Factory::runtime_.lock()->registerFactory("someip", Factory::get());
+    Runtime::get()->registerFactory("someip", Factory::get());
     Configuration::load();
 }
-
-DEINITIALIZER(FactoryDeinit) {
-    if (auto rt = Factory::runtime_.lock()) {
-        rt->unregisterFactory("someip");
-    }
-}
-
-std::weak_ptr<CommonAPI::Runtime> Factory::runtime_;
 
 std::shared_ptr<Factory>
 Factory::get() {
