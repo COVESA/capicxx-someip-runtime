@@ -44,12 +44,13 @@ typedef int64_t ms_t;
 
 typedef vsomeip::uid_t uid_t;
 typedef vsomeip::gid_t gid_t;
+typedef vsomeip_sec_client_t sec_client_t;
 
 typedef uint32_t AvailabilityHandlerId_t;
 typedef std::function<void (std::shared_ptr<Proxy>, service_id_t, instance_id_t, bool, void*)> AvailabilityHandler_t;
-typedef std::function<bool (client_id_t, uid_t, gid_t, bool) > SubscriptionHandler_t;
+typedef std::function<bool (client_id_t, const vsomeip_sec_client_t *, const std::string &, bool) > SubscriptionHandler_t;
 typedef std::function<void (const bool)> SubscriptionAcceptedHandler_t;
-typedef std::function<void (client_id_t, uid_t, gid_t, bool, const SubscriptionAcceptedHandler_t&) > AsyncSubscriptionHandler_t;
+typedef std::function<void (client_id_t, const vsomeip_sec_client_t *, const std::string &, bool, const SubscriptionAcceptedHandler_t&) > AsyncSubscriptionHandler_t;
 
 typedef std::uint32_t session_id_fake_t;
 

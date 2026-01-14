@@ -5,7 +5,9 @@
 
 #include <typeinfo>
 
+#include <CommonAPI/Logger.hpp>
 #include <CommonAPI/SomeIP/ClientId.hpp>
+#include <CommonAPI/SomeIP/Helper.hpp>
 #include <CommonAPI/SomeIP/Message.hpp>
 
 namespace std {
@@ -23,8 +25,26 @@ public:
 namespace CommonAPI {
 namespace SomeIP {
 
-ClientId::ClientId(client_id_t client_id, uid_t _uid, gid_t _gid)
-    : client_id_(client_id), uid_(_uid), gid_(_gid) {
+ClientId::ClientId()
+        : client_id_ {0xffff},
+          uid_ {0xffffffff},
+          gid_ {0xffffffff} {
+}
+
+ClientId::ClientId(client_id_t _client,
+        const vsomeip_sec_client_t *_sec_client, const std::string &_env)
+    : client_id_ {_client},
+      uid_ {_sec_client ? _sec_client->user : 0xffffffff},
+      gid_ {_sec_client ? _sec_client->group : 0xffffffff},
+      env_(_env) {
+
+    if (_sec_client)
+        hostAddress_ = addressToString(_sec_client->host);
+}
+
+ClientId::ClientId(client_id_t _client,
+        const vsomeip_sec_client_t &_sec_client, const std::string &_env)
+    : ClientId(_client, &_sec_client, _env) {
 }
 
 ClientId::~ClientId() {
@@ -58,6 +78,27 @@ uid_t ClientId::getUid() const {
 
 gid_t ClientId::getGid() const {
     return gid_;
+}
+
+std::string ClientId::getHostAddress() const {
+    return hostAddress_;
+}
+
+std::string ClientId::getEnv() const {
+    return env_;
+}
+
+std::shared_ptr<ClientId>
+ClientId::getSomeIPClient(const std::shared_ptr<CommonAPI::ClientId> _client) {
+
+    std::shared_ptr<ClientId> client = std::dynamic_pointer_cast<ClientId, CommonAPI::ClientId>(_client);
+
+    if (client == nullptr)
+    {
+        COMMONAPI_ERROR("CommonAPI::SomeIP::getSomeIPClient dynamic_pointer_cast returning nullptr.");
+    }
+
+    return client;
 }
 
 } // namespace SomeIP

@@ -49,7 +49,7 @@ size_t OutputStream::popPosition() {
 }
 
 OutputStream& OutputStream::writeValue(const bool &_value, const EmptyDeployment *) {
-    return _writeBitValue(_value, 8, false);
+    return _writeBitValue(_value ? 0x1u : 0x0u, 8, false);
 }
 
 OutputStream& OutputStream::writeValue(const int8_t &_value, const EmptyDeployment *) {

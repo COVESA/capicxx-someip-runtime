@@ -25,7 +25,7 @@ namespace CommonAPI {
 namespace SomeIP {
 
 class Address;
-class AddressTranslator;
+class Configuration;
 
 class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
         : public virtual CommonAPI::Proxy {
@@ -101,7 +101,7 @@ class COMMONAPI_EXPORT_CLASS_EXPLICIT ProxyBase
 
     std::set<event_id_t> eventHandlerAdded_;
     std::mutex eventHandlerAddedMutex_;
-    std::shared_ptr<AddressTranslator> addressTranslator_;
+    std::shared_ptr<Configuration> configuration_;
 };
 
 const std::shared_ptr< ProxyConnection >& ProxyBase::getConnection() const {

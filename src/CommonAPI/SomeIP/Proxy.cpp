@@ -9,9 +9,10 @@
 #include <CommonAPI/Types.hpp>
 #include <CommonAPI/Utils.hpp>
 #include <CommonAPI/SomeIP/Proxy.hpp>
+#include <CommonAPI/SomeIP/Configuration.hpp>
 #include <CommonAPI/SomeIP/Connection.hpp>
 #include <CommonAPI/SomeIP/Factory.hpp>
-#include <CommonAPI/SomeIP/AddressTranslator.hpp>
+//#include <CommonAPI/SomeIP/AddressTranslator.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -253,7 +254,7 @@ Proxy::Proxy(const Address &_address,
              const std::shared_ptr<ProxyConnection> &connection) :
         ProxyBase(connection),
         address_(_address),
-        alias_(AddressTranslator::get()->getAddressAlias(_address)),
+        alias_(Configuration::get()->getAddressAlias(_address)),
         proxyStatusEvent_(this),
         availabilityStatus_(AvailabilityStatus::UNKNOWN),
         availabilityHandlerId_(0),
@@ -288,8 +289,6 @@ bool Proxy::init() {
     if (!connection)
         return false;
 
-    connection->requestService(alias_);
-
     std::weak_ptr<Proxy> itsProxy = shared_from_this();
     availabilityHandlerId_ = connection->registerAvailabilityHandler(
                                     alias_,
@@ -302,6 +301,9 @@ bool Proxy::init() {
                                               std::placeholders::_5),
                                     itsProxy,
                                     NULL);
+
+    connection->requestService(alias_);
+
     if (connection->isAvailable(alias_)) {
         std::lock_guard<std::mutex> itsLock(availabilityMutex_);
         availabilityStatus_ = AvailabilityStatus::AVAILABLE;

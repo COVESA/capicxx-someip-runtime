@@ -19,17 +19,9 @@ InstanceAvailabilityStatusChangedEvent::InstanceAvailabilityStatusChangedEvent(
                 observedInterfaceName_(_interfaceName),
                 observedInterfaceServiceId_ (_serviceId),
                 availabilityHandlerId_(0) {
-    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE, vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
-    proxy_.getConnection()->requestService(wildcardAddress);
 }
 
 InstanceAvailabilityStatusChangedEvent::~InstanceAvailabilityStatusChangedEvent() {
-    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE,  vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
-
-    proxy_.getConnection()->unregisterAvailabilityHandler(
-            wildcardAddress, availabilityHandlerId_);
-
-    proxy_.getConnection()->releaseService(wildcardAddress);
 }
 
 void
@@ -98,13 +90,19 @@ InstanceAvailabilityStatusChangedEvent::onFirstListenerAdded(
     std::weak_ptr<Proxy> itsProxy = proxy_.shared_from_this();
     availabilityHandlerId_ = proxy_.getConnection()->registerAvailabilityHandler(
                                 wildcardAddress, onServiceInstanceStatus, itsProxy, this);
+
+    proxy_.getConnection()->requestService(wildcardAddress);
 }
 
 void
 InstanceAvailabilityStatusChangedEvent::onLastListenerRemoved(
         const Listener &) {
-    // Destruktor of InstanceAvailabilityStatusChangedEvent will remove the availability handler
-    // As its needed anyways even if a user never subscribes on this event
+    Address wildcardAddress(observedInterfaceServiceId_, vsomeip::ANY_INSTANCE,  vsomeip::ANY_MAJOR, vsomeip::ANY_MINOR);
+
+    proxy_.getConnection()->unregisterAvailabilityHandler(
+            wildcardAddress, availabilityHandlerId_);
+
+    proxy_.getConnection()->releaseService(wildcardAddress);
 }
 
 bool

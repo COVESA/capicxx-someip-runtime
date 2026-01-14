@@ -34,6 +34,18 @@ struct make_sequence_range<0, Offset_, S_...> {
     typedef index_sequence<S_...> type;
 };
 
+static inline std::string
+addressToString(vsomeip_sec_ip_addr_t _addr) {
+
+    std::ostringstream itsConverter;
+    itsConverter << std::dec
+            << (_addr & 0xff) << '.'
+            << ((_addr >> 8) & 0xff) << '.'
+            << ((_addr >> 16) & 0xff) << '.'
+            << ((_addr >> 24) & 0xff);
+    return itsConverter.str();
+}
+
 } // namespace SomeIP
 } // namespace CommonAPI
 

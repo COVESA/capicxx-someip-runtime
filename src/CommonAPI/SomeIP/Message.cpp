@@ -3,8 +3,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <CommonAPI/SomeIP/Message.hpp>
+
 #include <CommonAPI/SomeIP/Connection.hpp>
+#include <CommonAPI/SomeIP/Helper.hpp>
+#include <CommonAPI/SomeIP/Message.hpp>
 
 namespace CommonAPI {
 namespace SomeIP {
@@ -184,12 +186,26 @@ bool Message::isValidCRC() const {
     return message_->is_valid_crc();
 }
 
+std::string Message::getHostAddress() const {
+
+    return addressToString(
+            message_->get_sec_client().host);
+}
+
 uid_t Message::getUid() const {
     return message_->get_uid();
 }
 
 gid_t Message::getGid() const {
     return message_->get_gid();
+}
+
+sec_client_t Message::getSecClient() const {
+    return message_->get_sec_client();
+}
+
+std::string Message::getEnv() const {
+    return message_->get_env();
 }
 
 } // namespace SomeIP

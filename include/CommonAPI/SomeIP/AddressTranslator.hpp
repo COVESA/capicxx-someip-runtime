@@ -42,38 +42,13 @@ public:
             service_id_t _service, instance_id_t _instance,
             major_version_t _major, minor_version_t _minor);
 
-    COMMONAPI_EXPORT const Address & getAddressAlias(const Address &_address) const;
-    COMMONAPI_EXPORT method_id_t getMethodAlias(const Address &_address,
-            const method_id_t _method) const;
-    COMMONAPI_EXPORT eventgroup_id_t getEventgroupAlias(const Address &_address,
-            const eventgroup_id_t _eventgroup) const;
-
 private:
-    COMMONAPI_EXPORT bool readConfiguration();
-    COMMONAPI_EXPORT void readServiceAlias(const std::string &_source,
-            const std::string &_target);
-    COMMONAPI_EXPORT void readMethodAlias(const std::string &_source,
-            const std::string &_target);
-    COMMONAPI_EXPORT void readEventgroupAlias(const std::string &_source,
-            const std::string &_target);
-    COMMONAPI_EXPORT bool readValue(const std::string &_data,
-            Address &_sourceAddress, uint16_t &_id, bool _readId);
-
     COMMONAPI_EXPORT bool isValidService(const service_id_t) const;
     COMMONAPI_EXPORT bool isValidInstance(const instance_id_t) const;
-    COMMONAPI_EXPORT bool isValidMethod(const method_id_t) const;
-    COMMONAPI_EXPORT bool isValidEventgroup(const eventgroup_id_t) const;
-
-private:
-    std::string defaultConfig_;
 
     std::map<CommonAPI::Address, Address> forwards_;
     std::map<Address, CommonAPI::Address> backwards_;
 
-    typedef std::map<method_id_t, method_id_t> MethodAlias_t;
-    typedef std::map<eventgroup_id_t, eventgroup_id_t> EventgroupAlias_t;
-    typedef std::tuple<Address, MethodAlias_t, EventgroupAlias_t> Alias_t;
-    std::map<Address, Alias_t > aliases_;
 #ifdef COMMONAPI_ENABLE_ADDRESS_ALIASES
     std::map<CommonAPI::Address, CommonAPI::Address> others_;
 #endif // COMMONAPI_ENABLE_ADDRESS_ALIASES

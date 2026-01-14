@@ -13,7 +13,17 @@
 namespace CommonAPI {
 namespace SomeIP {
 
+#ifndef COMMONAPI_SOMEIP_APPLICATION_NAME
 #define COMMONAPI_SOMEIP_APPLICATION_NAME ""
+#endif
+
+#ifndef DEFAULT_MAX_PROCESSING_TIME
+#define DEFAULT_MAX_PROCESSING_TIME 100
+#endif
+
+#ifndef DEFAULT_MAX_QUEUE_SIZE
+#define DEFAULT_MAX_QUEUE_SIZE 25
+#endif
 
 } // namespace SomeIP
 } // namespace CommonAPI

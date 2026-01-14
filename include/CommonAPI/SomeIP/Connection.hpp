@@ -127,6 +127,8 @@ public:
     bool connect(bool startDispatchThread = true);
     void disconnect();
 
+    std::string getName() const;
+
     virtual bool isConnected() const;
     virtual void waitUntilConnected();
 
@@ -328,7 +330,7 @@ private:
                 std::map<event_id_t, std::uint32_t>>>> requestedEvents_;
 
     std::map<service_id_t, std::map<instance_id_t, std::map<eventgroup_id_t, AsyncSubscriptionHandler_t >>> subscription_;
-    std::mutex subscriptionMutex_;
+    std::recursive_mutex subscriptionMutex_;
 
     std::map<std::shared_ptr<vsomeip::message>, session_id_fake_t> errorResponses_;
 
