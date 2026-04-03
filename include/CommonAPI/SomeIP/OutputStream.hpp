@@ -461,7 +461,7 @@ public:
             _bits = (sizeof(Type_) << 3);
 
         if (currentBit_ == 0 && _bits == (sizeof(Type_) << 3)) {
-        #if __BYTE_ORDER == __LITTLE_ENDIAN
+        #if defined(_WIN32) || (__BYTE_ORDER == __LITTLE_ENDIAN)
             if (isLittleEndian_) {
                 for (size_t i = 0; i < sizeof(Type_); ++i) {
                     _writeRaw(value.raw_[i]);
@@ -494,7 +494,7 @@ public:
             // Set the source pointer dependend on the byte orders
             byte_t * source(nullptr);
             std::size_t firstUsedByte(((sizeof(Type_) << 3) - _bits) >> 3);
-            #if __BYTE_ORDER == __LITTLE_ENDIAN
+            #if defined(_WIN32) || (__BYTE_ORDER == __LITTLE_ENDIAN)
             if (isLittleEndian_)
                 source = &value.raw_[firstUsedByte];
             else
@@ -542,7 +542,7 @@ public:
                 readPosition = uint8_t(readPosition + numCopy);
                 if (readPosition == 8) {
                     readPosition = 0;
-                    #if __BYTE_ORDER == __LITTLE_ENDIAN
+                    #if defined(_WIN32) || (__BYTE_ORDER == __LITTLE_ENDIAN)
                     if (isLittleEndian_)
                         source++;
                     else
