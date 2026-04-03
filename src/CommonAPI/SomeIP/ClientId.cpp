@@ -27,15 +27,15 @@ namespace SomeIP {
 
 ClientId::ClientId()
         : client_id_ {0xffff},
-          uid_ {0xffffffff},
-          gid_ {0xffffffff} {
+          uid_ {static_cast<uid_t>(0xffffffff)},
+          gid_ {static_cast<gid_t>(0xffffffff)} {
 }
 
 ClientId::ClientId(client_id_t _client,
         const vsomeip_sec_client_t *_sec_client, const std::string &_env)
     : client_id_ {_client},
-      uid_ {_sec_client ? _sec_client->user : 0xffffffff},
-      gid_ {_sec_client ? _sec_client->group : 0xffffffff},
+      uid_ {_sec_client ? static_cast<uid_t>(_sec_client->user) : static_cast<uid_t>(0xffffffff)},
+      gid_ {_sec_client ? static_cast<gid_t>(_sec_client->group) : static_cast<gid_t>(0xffffffff)},
       env_(_env) {
 
     if (_sec_client)
