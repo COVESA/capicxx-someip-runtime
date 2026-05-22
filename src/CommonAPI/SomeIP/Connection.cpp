@@ -403,6 +403,10 @@ Connection::~Connection() {
         lockedContext->deregisterDispatchSource(dispatchSource_);
         lockedContext->deregisterWatch(watch_);
     }
+    delete dispatchSource_;
+    dispatchSource_ = nullptr;
+    delete watch_;
+    watch_ = nullptr;
     bool shouldDisconnect(false);
     {
         std::lock_guard<std::mutex> itsLock(connectionMutex_);
